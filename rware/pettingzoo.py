@@ -25,16 +25,24 @@ class PettingZooWrapper(ParallelEnv):
     def __init__(self, env: Warehouse):
         super().__init__()
         self._env = env
-        self.agents = [str(agent.id) for agent in self._env.agents]
-        self.possible_agents = self.agents
+        self.agents = self.possible_agents = []
+        self.observation_spaces = self.action_spaces = {}
 
     def reset(self, seed: Optional[int] = None, options: Optional[Dict] = None):
         obs, info = self._env.reset(seed, options)
         obs = to_agentid_dict(obs)
         info = {str(i + 1): {} for i in range(self._env.n_agents)}
-        # Reset agents
+        # Reset agents and spaces
         self.agents = [str(agent.id) for agent in self._env.agents]
         self.possible_agents = self.agents
+        self.observation_spaces = {
+            agent_id: self.observation_space(agent_id)
+            for agent_id in [str(i + 1) for i in range(self._env.n_agents)]
+        }
+        self.action_spaces = {
+            agent_id: self.action_space(agent_id)
+            for agent_id in [str(i + 1) for i in range(self._env.n_agents)]
+        }
         return obs, info
 
     def step(self, actions: dict[AgentID, ActionType]) -> Tuple[
@@ -83,7 +91,7 @@ class PettingZooWrapper(ParallelEnv):
         space = self._env.observation_space
         if self._env.fast_obs:
             raise NotImplementedError(
-                "PettingZooWrapper not yet supported for Warehouse fast_obs."
+                "PettingZooWrapper not yet supported for ObservationType.FLATTENED."
             )
         assert isinstance(space, gym.spaces.Tuple)
         return space[int(agent) - 1]
