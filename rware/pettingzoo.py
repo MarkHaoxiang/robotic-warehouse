@@ -29,7 +29,13 @@ class PettingZooWrapper(ParallelEnv):
         self.possible_agents = self.agents
 
     def reset(self, seed: Optional[int] = None, options: Optional[Dict] = None):
-        self._env.reset(seed, options)
+        obs, info = self._env.reset(seed, options)
+        obs = to_agentid_dict(obs)
+        info = {str(i + 1): {} for i in range(self._env.n_agents)}
+        # Reset agents
+        self.agents = [str(agent.id) for agent in self._env.agents]
+        self.possible_agents = self.agents
+        return obs, info
 
     def step(self, actions: dict[AgentID, ActionType]) -> Tuple[
         dict[AgentID, ObsType],
@@ -41,7 +47,7 @@ class PettingZooWrapper(ParallelEnv):
         # Unwrap to list of actions
         actions_unwrapped = [(int(id_) - 1, action) for id_, action in actions.items()]
         actions_unwrapped.sort(key=lambda x: x[0])
-        actions_unwrapped = [x[1] for x in actions]
+        actions_unwrapped = [x[1] for x in actions_unwrapped]
         assert (
             len(actions_unwrapped) == self._env.n_agents
         ), f"Incorrect number of actions provided. Expected {self._env.n_agents} but got {len(actions_unwrapped)}"
@@ -52,8 +58,10 @@ class PettingZooWrapper(ParallelEnv):
         # Transform to PettingZoo output
         obs = to_agentid_dict(obs)
         rewards = to_agentid_dict(rewards)
-        terminated = to_agentid_dict(terminated)
-        truncated = to_agentid_dict(truncated)
+        if terminated or truncated:
+            self.agents = []  # PettingZoo requires agents to be removed
+        terminated = to_agentid_dict([terminated for _ in range(self._env.n_agents)])
+        truncated = to_agentid_dict([truncated for _ in range(self._env.n_agents)])
         if len(info) != 0:
             warnings.warn(
                 "Error: expected info dict to be empty. PettingZooWrapper is likely out of date."
@@ -81,6 +89,6 @@ class PettingZooWrapper(ParallelEnv):
         return space[int(agent) - 1]
 
     def action_space(self, agent: AgentID) -> gym.spaces.Space:
-        space = self._env.observation_space
+        space = self._env.action_space
         assert isinstance(space, gym.spaces.Tuple)
         return space[int(agent) - 1]
