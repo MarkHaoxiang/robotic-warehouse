@@ -31,12 +31,12 @@ def env_0():
     env.agents[0].y = 27
     env.agents[0].dir = Direction.DOWN
 
-    env.shelfs[0].x = 4
-    env.shelfs[0].y = 27
+    env.shelves[0].x = 4
+    env.shelves[0].y = 27
 
-    env.agents[0].carrying_shelf = env.shelfs[0]
+    env.agents[0].carrying_shelf = env.shelves[0]
 
-    env.request_queue[0] = env.shelfs[0]
+    env.request_queue[0] = env.shelves[0]
     env._recalc_grid()
     return env
 
@@ -580,7 +580,7 @@ def test_reproducibility(env_0):
             obss, _ = env.reset()
             obss1.append(np.array(obss).copy())
             grid1.append(env.unwrapped.grid.copy())
-            highways1.append(env.unwrapped.highways.copy())
+            highways1.append(env.unwrapped.layout.highways.copy())
             request_queue1.append(
                 np.array([shelf.id for shelf in env.unwrapped.request_queue])
             )
@@ -604,7 +604,7 @@ def test_reproducibility(env_0):
             obss, _ = env.reset()
             obss2.append(np.array(obss).copy())
             grid2.append(env.unwrapped.grid.copy())
-            highways2.append(env.unwrapped.highways.copy())
+            highways2.append(env.unwrapped.layout.highways.copy())
             request_queue2.append(
                 np.array([shelf.id for shelf in env.unwrapped.request_queue])
             )

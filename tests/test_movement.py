@@ -187,10 +187,12 @@ def test_head_collision_0(env_two_agents):
 def test_head_collision_1(env_two_agents):
     env = env_two_agents
 
-    env.agents[0].x = env.shelfs[0].x = 4  # should place it in the middle (empty space)
-    env.agents[0].y = env.shelfs[0].y = 25
+    env.agents[0].x = env.shelves[0].x = (
+        4  # should place it in the middle (empty space)
+    )
+    env.agents[0].y = env.shelves[0].y = 25
     env.agents[0].dir = Direction.RIGHT
-    env.agents[0].carrying_shelf = env.shelfs[0]
+    env.agents[0].carrying_shelf = env.shelves[0]
 
     env.agents[1].x = 5  # should place it next to the other
     env.agents[1].y = 25
@@ -207,15 +209,17 @@ def test_head_collision_1(env_two_agents):
 def test_head_collision_2(env_two_agents):
     env = env_two_agents
 
-    env.agents[0].x = env.shelfs[0].x = 4  # should place it in the middle (empty space)
-    env.agents[0].y = env.shelfs[0].y = 25
+    env.agents[0].x = env.shelves[0].x = (
+        4  # should place it in the middle (empty space)
+    )
+    env.agents[0].y = env.shelves[0].y = 25
     env.agents[0].dir = Direction.RIGHT
-    env.agents[0].carrying_shelf = env.shelfs[0]
+    env.agents[0].carrying_shelf = env.shelves[0]
 
-    env.agents[1].x = env.shelfs[1].x = 5  # should place it next to the other
-    env.agents[1].y = env.shelfs[1].y = 25
+    env.agents[1].x = env.shelves[1].x = 5  # should place it next to the other
+    env.agents[1].y = env.shelves[1].y = 25
     env.agents[1].dir = Direction.LEFT
-    env.agents[1].carrying_shelf = env.shelfs[1]
+    env.agents[1].carrying_shelf = env.shelves[1]
     env._recalc_grid()
     env.step([Action.FORWARD, Action.FORWARD])
 
@@ -228,10 +232,12 @@ def test_head_collision_2(env_two_agents):
 def test_head_collision_3(env_two_agents):
     env = env_two_agents
 
-    env.agents[0].x = env.shelfs[0].x = 3  # should place it in the middle (empty space)
-    env.agents[0].y = env.shelfs[0].y = 25
+    env.agents[0].x = env.shelves[0].x = (
+        3  # should place it in the middle (empty space)
+    )
+    env.agents[0].y = env.shelves[0].y = 25
     env.agents[0].dir = Direction.LEFT
-    env.agents[0].carrying_shelf = env.shelfs[0]
+    env.agents[0].carrying_shelf = env.shelves[0]
 
     env.agents[1].x = 2  # should place it next to the other
     env.agents[1].y = 25
@@ -501,65 +507,67 @@ def test_turn_left_3(env_single_agent):
 def test_simple_carrying(env_single_agent):
     env = env_single_agent
 
-    env.agents[0].x = env.shelfs[0].x = 4  # should place it in the middle (empty space)
-    env.agents[0].y = env.shelfs[0].y = 25
+    env.agents[0].x = env.shelves[0].x = (
+        4  # should place it in the middle (empty space)
+    )
+    env.agents[0].y = env.shelves[0].y = 25
     env.agents[0].dir = Direction.DOWN
 
-    env.agents[0].carrying_shelf = env.shelfs[0]
+    env.agents[0].carrying_shelf = env.shelves[0]
 
     env._recalc_grid()
     env.step([Action.FORWARD])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 26
-    assert env.shelfs[0].x == 4
-    assert env.shelfs[0].y == 26
+    assert env.shelves[0].x == 4
+    assert env.shelves[0].y == 26
 
 
 def test_simple_carrying_collision(env_single_agent):
     env = env_single_agent
 
-    env.agents[0].x = env.shelfs[0].x = 3
-    env.agents[0].y = env.shelfs[0].y = 25
+    env.agents[0].x = env.shelves[0].x = 3
+    env.agents[0].y = env.shelves[0].y = 25
     env.agents[0].dir = Direction.LEFT
 
-    env.agents[0].carrying_shelf = env.shelfs[0]
+    env.agents[0].carrying_shelf = env.shelves[0]
 
     env._recalc_grid()
     env.step([Action.FORWARD])
 
     assert env.agents[0].x == 3
     assert env.agents[0].y == 25
-    assert env.shelfs[0].x == 3
-    assert env.shelfs[0].y == 25
+    assert env.shelves[0].x == 3
+    assert env.shelves[0].y == 25
 
 
 def test_simple_carrying_chain(env_two_agents):
     env = env_two_agents
 
-    env.agents[0].x = env.shelfs[0].x = 3
-    env.agents[0].y = env.shelfs[0].y = 25
+    env.agents[0].x = env.shelves[0].x = 3
+    env.agents[0].y = env.shelves[0].y = 25
     env.agents[0].dir = Direction.RIGHT
 
-    env.agents[1].x = env.shelfs[1].x = 4
-    env.agents[1].y = env.shelfs[1].y = 25
+    env.agents[1].x = env.shelves[1].x = 4
+    env.agents[1].y = env.shelves[1].y = 25
     env.agents[1].dir = Direction.RIGHT
 
-    env.agents[0].carrying_shelf = env.shelfs[0]
-    env.agents[1].carrying_shelf = env.shelfs[1]
+    env.agents[0].carrying_shelf = env.shelves[0]
+    env.agents[1].carrying_shelf = env.shelves[1]
 
     env._recalc_grid()
     env.step(2 * [Action.FORWARD])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 25
-    assert env.shelfs[0].x == 4
-    assert env.shelfs[0].y == 25
+    assert env.shelves[0].x == 4
+    assert env.shelves[0].y == 25
 
     assert env.agents[1].x == 5
     assert env.agents[1].y == 25
-    assert env.shelfs[1].x == 5
-    assert env.shelfs[1].y == 25
+    assert env.shelves[1].x == 5
+    assert env.shelves[1].y == 25
 
 
 def test_pickup_and_carry_0(env_single_agent):
