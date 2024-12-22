@@ -20,7 +20,7 @@ def to_agentid_dict(data: List):
 
 
 class PettingZooWrapper(ParallelEnv):
-    """Wraps a Warehouse Env object to be compatible with the PettingZoo ParallelEnv API. fast_obs not supported."""
+    """Wraps a Warehouse Env object to be compatible with the PettingZoo ParallelEnv API."""
 
     def __init__(self, env: Warehouse):
         super().__init__()
@@ -89,10 +89,6 @@ class PettingZooWrapper(ParallelEnv):
 
     def observation_space(self, agent: AgentID) -> gym.spaces.Space:
         space = self._env.observation_space
-        if self._env.fast_obs:
-            raise NotImplementedError(
-                "PettingZooWrapper not yet supported for ObservationType.FLATTENED."
-            )
         assert isinstance(space, gym.spaces.Tuple)
         return space[int(agent) - 1]
 

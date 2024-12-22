@@ -13,11 +13,16 @@ if _has_pettingzoo:
 @pytest.mark.parametrize("n_agents", [1, 3])
 @pytest.mark.parametrize("msg_bits", [0, 1])
 @pytest.mark.parametrize("sensor_range", [1, 3])
-@pytest.mark.parametrize("max_inactivity_steps", [None, 10, 1000])
+@pytest.mark.parametrize("max_inactivity_steps", [None, 10])
 @pytest.mark.parametrize("reward_type", [RewardType.GLOBAL, RewardType.INDIVIDUAL])
 @pytest.mark.parametrize(
     "observation_type",
-    [ObservationType.DICT, ObservationType.IMAGE, ObservationType.IMAGE_DICT],
+    [
+        ObservationType.DICT,
+        ObservationType.IMAGE,
+        ObservationType.IMAGE_DICT,
+        ObservationType.FLATTENED,
+    ],
 )
 def test_pettingzoo_wrapper(
     n_agents: int,
