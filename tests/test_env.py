@@ -4,6 +4,8 @@ import sys
 import gymnasium as gym
 import numpy as np
 import pytest
+from expecttest import assert_expected_inline
+
 
 from rware.warehouse import ObservationType, Warehouse, Direction, Action, RewardType
 
@@ -37,6 +39,83 @@ def env_0():
     env.request_queue[0] = env.shelfs[0]
     env._recalc_grid()
     return env
+
+
+def test_env_layout_from_params():
+    env = Warehouse(
+        shelf_columns=1,
+        column_height=3,
+        shelf_rows=3,
+    )
+    env.reset()
+    layout = str(env.get_global_image())
+    assert_expected_inline(
+        layout,
+        """\
+[[[0. 0. 0. 0.]
+  [0. 1. 1. 0.]
+  [0. 1. 1. 0.]
+  [0. 1. 1. 0.]
+  [0. 0. 0. 0.]
+  [0. 1. 1. 0.]
+  [0. 1. 1. 0.]
+  [0. 1. 1. 0.]
+  [0. 0. 0. 0.]
+  [0. 0. 0. 0.]
+  [0. 0. 0. 0.]
+  [0. 0. 0. 0.]
+  [0. 0. 0. 0.]
+  [0. 0. 0. 0.]]
+
+ [[0. 0. 0. 0.]
+  [0. 0. 0. 0.]
+  [0. 0. 0. 0.]
+  [0. 0. 0. 0.]
+  [0. 0. 0. 0.]
+  [0. 0. 0. 0.]
+  [0. 0. 0. 0.]
+  [0. 0. 0. 0.]
+  [0. 0. 0. 0.]
+  [0. 0. 0. 0.]
+  [0. 0. 0. 0.]
+  [0. 0. 0. 0.]
+  [0. 0. 0. 0.]
+  [0. 1. 1. 0.]]]""",
+    )
+
+
+def test_env_layout_from_params():
+    layout = """
+.......
+...x...
+..x.x..
+.x...x.
+..x.x..
+...x...
+.g...g.
+"""
+    env = Warehouse(shelf_columns=3, column_height=8, shelf_rows=1, layout=layout)
+    env.reset()
+    layout = str(env.get_global_image())
+    assert_expected_inline(
+        layout,
+        """\
+[[[0. 0. 0. 0. 0. 0. 0.]
+  [0. 0. 0. 1. 0. 0. 0.]
+  [0. 0. 1. 0. 1. 0. 0.]
+  [0. 1. 0. 0. 0. 1. 0.]
+  [0. 0. 1. 0. 1. 0. 0.]
+  [0. 0. 0. 1. 0. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 0.]]
+
+ [[0. 0. 0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 0.]
+  [0. 1. 0. 0. 0. 1. 0.]]]""",
+    )
 
 
 def test_grid_size():
@@ -174,13 +253,7 @@ def test_obs_space_0():
                     env.observation_space[i]["self"][key],
                     obs[i]["self"][key],
                 )
-                assert env.observation_space[
-                    i
-                ][
-                    "self"
-                ][
-                    key
-                ].contains(
+                assert env.observation_space[i]["self"][key].contains(
                     obs[i]["self"][key]
                 ), f"{obs[i]['self'][key]} is not contained in {env.observation_space[i]['self'][key]}"
         for j in range(len(env.observation_space[i]["sensors"])):
@@ -196,15 +269,7 @@ def test_obs_space_0():
                         env.observation_space[i]["sensors"][j][key],
                         obs[i]["sensors"][j][key],
                     )
-                    assert env.observation_space[
-                        i
-                    ][
-                        "sensors"
-                    ][
-                        j
-                    ][
-                        key
-                    ].contains(
+                    assert env.observation_space[i]["sensors"][j][key].contains(
                         obs[i]["sensors"][j][key]
                     ), f"{obs[i]['sensors'][j][key]} is not contained in {env.observation_space[i]['sensors'][j][key]}"
     obs, _, _, _, _ = env.step(env.action_space.sample())
@@ -221,13 +286,7 @@ def test_obs_space_0():
                     env.observation_space[i]["self"][key],
                     obs[i]["self"][key],
                 )
-                assert env.observation_space[
-                    i
-                ][
-                    "self"
-                ][
-                    key
-                ].contains(
+                assert env.observation_space[i]["self"][key].contains(
                     obs[i]["self"][key]
                 ), f"{obs[i]['self'][key]} is not contained in {env.observation_space[i]['self'][key]}"
         for j in range(len(env.observation_space[i]["sensors"])):
@@ -243,15 +302,7 @@ def test_obs_space_0():
                         env.observation_space[i]["sensors"][j][key],
                         obs[i]["sensors"][j][key],
                     )
-                    assert env.observation_space[
-                        i
-                    ][
-                        "sensors"
-                    ][
-                        j
-                    ][
-                        key
-                    ].contains(
+                    assert env.observation_space[i]["sensors"][j][key].contains(
                         obs[i]["sensors"][j][key]
                     ), f"{obs[i]['sensors'][j][key]} is not contained in {env.observation_space[i]['sensors'][j][key]}"
 

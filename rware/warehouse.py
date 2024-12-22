@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 from collections import OrderedDict
 from enum import Enum
-from typing import List, Tuple, Optional, Dict
 
 import gymnasium as gym
 from gymnasium.utils import seeding
@@ -87,8 +88,8 @@ class Agent(Entity):
         super().__init__(Agent.counter, x, y)
         self.dir = dir_
         self.message = np.zeros(msg_bits)
-        self.req_action: Optional[Action] = None
-        self.carrying_shelf: Optional[Shelf] = None
+        self.req_action: Action | None = None
+        self.carrying_shelf: Shelf | None = None
         self.canceled_action = None
         self.has_delivered = False
 
@@ -99,7 +100,7 @@ class Agent(Entity):
         else:
             return (_LAYER_AGENTS,)
 
-    def req_location(self, grid_size) -> Tuple[int, int]:
+    def req_location(self, grid_size) -> tuple[int, int]:
         if self.req_action != Action.FORWARD:
             return self.x, self.y
         elif self.dir == Direction.UP:
@@ -137,6 +138,85 @@ class Shelf(Entity):
         return (_LAYER_SHELFS,)
 
 
+class Layout:
+    def __init__(
+        self,
+        grid_size: tuple[int, int],
+        grid: np.ndarray,
+        goals: list[tuple[int, int]],
+        highways: np.ndarray,
+    ):
+        super().__init__()
+        self.grid_size = grid_size
+        self.grid = grid
+        self.goals = goals
+        self.highways = highways
+
+    def validate(self):
+        assert len(self.goals) >= 1, "At least one goal must be provided."
+
+    @staticmethod
+    def from_params(shelf_columns: int, shelf_rows: int, column_height: int) -> Layout:
+        assert shelf_columns % 2 == 1, "Only odd number of shelf columns is supported"
+        grid_size = (
+            (column_height + 1) * shelf_rows + 2,
+            (2 + 1) * shelf_columns + 1,
+        )
+        column_height = column_height
+        grid = np.zeros((_COLLISION_LAYERS, *grid_size), dtype=np.int32)
+        goals = [
+            (grid_size[1] // 2 - 1, grid_size[0] - 1),
+            (grid_size[1] // 2, grid_size[0] - 1),
+        ]
+
+        highways = np.zeros(grid_size, dtype=np.uint8)
+
+        def highway_func(x, y):
+            is_on_vertical_highway = x % 3 == 0
+            is_on_horizontal_highway = y % (column_height + 1) == 0
+            is_on_delivery_row = y == grid_size[0] - 1
+            is_on_queue = (y > grid_size[0] - (column_height + 3)) and (
+                x == grid_size[1] // 2 - 1 or x == grid_size[1] // 2
+            )
+            return (
+                is_on_vertical_highway
+                or is_on_horizontal_highway
+                or is_on_delivery_row
+                or is_on_queue
+            )
+
+        for x in range(grid_size[1]):
+            for y in range(grid_size[0]):
+                highways[y, x] = int(highway_func(x, y))
+
+        return Layout(grid_size, grid, goals, highways)
+
+    @staticmethod
+    def from_str(layout: str):
+        layout = layout.strip().replace(" ", "")
+        grid_height = layout.count("\n") + 1
+        lines = layout.split("\n")
+        grid_width = len(lines[0])
+        for line in lines:
+            assert len(line) == grid_width, "Layout must be rectangular"
+
+        goals = []
+        grid_size = (grid_height, grid_width)
+        grid = np.zeros((_COLLISION_LAYERS, *grid_size), dtype=np.int32)
+        highways = np.zeros(grid_size, dtype=np.uint8)
+
+        for y, line in enumerate(lines):
+            for x, char in enumerate(line):
+                assert char.lower() in "gx."
+                if char.lower() == "g":
+                    goals.append((x, y))
+                    highways[y, x] = 1
+                elif char.lower() == ".":
+                    highways[y, x] = 1
+
+        return Layout(grid_size, grid, goals, highways)
+
+
 class Warehouse(gym.Env):
     metadata = {
         "render_modes": ["human", "rgb_array"],
@@ -145,19 +225,19 @@ class Warehouse(gym.Env):
 
     def __init__(
         self,
-        shelf_columns: int,
-        column_height: int,
-        shelf_rows: int,
-        n_agents: int,
-        msg_bits: int,
-        sensor_range: int,
-        request_queue_size: int,
-        max_inactivity_steps: Optional[int],
-        max_steps: Optional[int],
-        reward_type: RewardType,
-        layout: Optional[str] = None,
+        shelf_columns: int | None = None,
+        column_height: int | None = None,
+        shelf_rows: int | None = None,
+        n_agents: int = 3,
+        msg_bits: int = 0,
+        sensor_range: int = 1,
+        request_queue_size: int = 5,
+        max_inactivity_steps: int | None = 1000,
+        max_steps: int | None = None,
+        reward_type: RewardType = RewardType.GLOBAL,
+        layout: Layout | str | None = None,
         observation_type: ObservationType = ObservationType.FLATTENED,
-        image_observation_layers: List[ImageLayer] = [
+        image_observation_layers: list[ImageLayer] = [
             ImageLayer.SHELVES,
             ImageLayer.REQUESTS,
             ImageLayer.AGENTS,
@@ -223,7 +303,7 @@ class Warehouse(gym.Env):
         :param observation_type: Specifies type of observations
         :param image_observation_layers: Specifies types of layers observed if image-observations
             are used
-        :type image_observation_layers: List[ImageLayer]
+        :type image_observation_layers: list[ImageLayer]
         :param image_observation_directional: Specifies whether image observations should be
             rotated to be directional (agent perspective) if image-observations are used
         :type image_observation_directional: bool
@@ -232,17 +312,27 @@ class Warehouse(gym.Env):
         :type normalised_coordinates: bool
         """
 
-        self.goals: List[Tuple[int, int]] = []
-
-        if not layout:
-            self._make_layout_from_params(shelf_columns, shelf_rows, column_height)
+        # Generate initial layout
+        if layout is None:
+            if shelf_columns is None or shelf_rows is None or column_height is None:
+                raise ValueError("A layout is expected but none found.")
+            self.layout = Layout.from_params(shelf_columns, shelf_rows, column_height)
         else:
-            self._make_layout_from_str(layout)
+            if isinstance(layout, str):
+                self.layout = Layout.from_str(layout)
+            else:
+                self.layout = layout
+        self.layout.validate()
+
+        self.grid_size = self.layout.grid_size
+        self.grid = self.layout.grid
+        self.goals = self.layout.goals
+        self.highways = self.layout.highways
 
         self.n_agents = n_agents
         self.msg_bits = msg_bits
         self.sensor_range = sensor_range
-        self.max_inactivity_steps: Optional[int] = max_inactivity_steps
+        self.max_inactivity_steps = max_inactivity_steps
         self.reward_type = reward_type
         self.reward_range = (0, 1)
 
@@ -262,7 +352,7 @@ class Warehouse(gym.Env):
         self.request_queue_size = request_queue_size
         self.request_queue = []
 
-        self.agents: List[Agent] = []
+        self.agents: list[Agent] = []
 
         # default values:
         self.fast_obs = None
@@ -291,68 +381,10 @@ class Warehouse(gym.Env):
         self.renderer = None
         self.render_mode = render_mode
 
-    def _make_layout_from_params(self, shelf_columns, shelf_rows, column_height):
-        assert shelf_columns % 2 == 1, "Only odd number of shelf columns is supported"
-
-        self.grid_size = (
-            (column_height + 1) * shelf_rows + 2,
-            (2 + 1) * shelf_columns + 1,
-        )
-        self.column_height = column_height
-        self.grid = np.zeros((_COLLISION_LAYERS, *self.grid_size), dtype=np.int32)
-        self.goals = [
-            (self.grid_size[1] // 2 - 1, self.grid_size[0] - 1),
-            (self.grid_size[1] // 2, self.grid_size[0] - 1),
-        ]
-
-        self.highways = np.zeros(self.grid_size, dtype=np.uint8)
-
-        def highway_func(x, y):
-            is_on_vertical_highway = x % 3 == 0
-            is_on_horizontal_highway = y % (column_height + 1) == 0
-            is_on_delivery_row = y == self.grid_size[0] - 1
-            is_on_queue = (y > self.grid_size[0] - (column_height + 3)) and (
-                x == self.grid_size[1] // 2 - 1 or x == self.grid_size[1] // 2
-            )
-            return (
-                is_on_vertical_highway
-                or is_on_horizontal_highway
-                or is_on_delivery_row
-                or is_on_queue
-            )
-
-        for x in range(self.grid_size[1]):
-            for y in range(self.grid_size[0]):
-                self.highways[y, x] = int(highway_func(x, y))
-
-    def _make_layout_from_str(self, layout):
-        layout = layout.strip()
-        layout = layout.replace(" ", "")
-        grid_height = layout.count("\n") + 1
-        lines = layout.split("\n")
-        grid_width = len(lines[0])
-        for line in lines:
-            assert len(line) == grid_width, "Layout must be rectangular"
-
-        self.grid_size = (grid_height, grid_width)
-        self.grid = np.zeros((_COLLISION_LAYERS, *self.grid_size), dtype=np.int32)
-        self.highways = np.zeros(self.grid_size, dtype=np.uint8)
-
-        for y, line in enumerate(lines):
-            for x, char in enumerate(line):
-                assert char.lower() in "gx."
-                if char.lower() == "g":
-                    self.goals.append((x, y))
-                    self.highways[y, x] = 1
-                elif char.lower() == ".":
-                    self.highways[y, x] = 1
-
-        assert len(self.goals) >= 1, "At least one goal is required"
-
     def _use_image_obs(self, image_observation_layers, directional=True):
         """
         Set image observation space
-        :param image_observation_layers (List[ImageLayer]): list of layers to use as image channels
+        :param image_observation_layers (list[ImageLayer]): list of layers to use as image channels
         :param directional (bool): flag whether observations should be directional (pointing in
             direction of agent or north-wise)
         """
@@ -390,7 +422,7 @@ class Warehouse(gym.Env):
     def _use_image_dict_obs(self, image_observation_layers, directional=True):
         """
         Get image dictionary observation with image and flattened feature vector
-        :param image_observation_layers (List[ImageLayer]): list of layers to use as image channels
+        :param image_observation_layers (list[ImageLayer]): list of layers to use as image channels
         :param directional (bool): flag whether observations should be directional (pointing in
             direction of agent or north-wise)
         """
@@ -754,7 +786,7 @@ class Warehouse(gym.Env):
         for a in self.agents:
             self.grid[_LAYER_AGENTS, a.y, a.x] = a.id
 
-    def reset(self, seed=None, options=None):
+    def reset(self, seed: int | None = None, options=None):
         if seed is not None:
             # setting seed
             super().reset(seed=seed, options=options)
@@ -802,8 +834,8 @@ class Warehouse(gym.Env):
         return tuple([self._make_obs(agent) for agent in self.agents]), self._get_info()
 
     def step(
-        self, actions: List[Action]
-    ) -> Tuple[List[np.ndarray], List[float], bool, bool, Dict]:
+        self, actions: list[Action]
+    ) -> tuple[list[np.ndarray], list[float], bool, bool, dict]:
         assert len(actions) == len(self.agents)
 
         for agent, action in zip(self.agents, actions):
@@ -971,7 +1003,7 @@ class Warehouse(gym.Env):
         ],
         recompute=False,
         pad_to_shape=None,
-    ):
+    ) -> np.ndarray:
         """
         Get global image observation
         :param image_layers: image layers to include in global image
