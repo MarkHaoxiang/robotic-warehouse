@@ -1,6 +1,6 @@
 [project]
 name = "rware"
-version = "2.0.1"
+version = "2.0.0"
 description = "Multi-Robot Warehouse environment for reinforcement learning"
 readme = { content-type = "text/markdown", file = "README.md" }
 maintainers = [{ name = "Filippos Christianos" }]

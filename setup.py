@@ -9,7 +9,7 @@ README = (HERE / "README.md").read_text()
 
 setup(
     name="rware",
-    version="2.0.1",
+    version="2.0.0",
     description="Multi-Robot Warehouse environment for reinforcement learning",
     long_description=README,
     long_description_content_type="text/markdown",
