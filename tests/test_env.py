@@ -131,7 +131,7 @@ def test_grid_size():
         max_steps=None,
         reward_type=RewardType.GLOBAL,
     )
-    assert env.grid_size == (14, 4)
+    assert env.grid_size == (4, 14)
     env = Warehouse(
         shelf_columns=3,
         column_height=3,
@@ -144,7 +144,7 @@ def test_grid_size():
         max_steps=None,
         reward_type=RewardType.GLOBAL,
     )
-    assert env.grid_size == (14, 10)
+    assert env.grid_size == (10, 14)
 
 
 def test_action_space_0():
@@ -398,14 +398,7 @@ def test_inactivity_1(env_0):
     for i in range(4):
         _, _, done, _, _ = env.step([Action.NOOP])
         assert not done
-
-    (
-        _,
-        reward,
-        _,
-        _,
-        _,
-    ) = env.step([Action.FORWARD])
+    _, reward, _, _, _ = env.step([Action.FORWARD])
     assert reward[0] == pytest.approx(1.0)
     for i in range(9):
         _, _, done, _, _ = env.step([Action.NOOP])

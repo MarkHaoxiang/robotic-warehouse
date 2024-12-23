@@ -31,12 +31,12 @@ class Layout:
         assert len(self.goals) >= 1, "At least one goal position must be provided."
 
     def is_highway(self, pos: Point) -> bool:
-        return self.highways[pos.y, pos.x]
+        return self.highways[*pos]
 
     def reset_shelves(self) -> list[Shelf]:
         shelf_counter = 0
         shelves: list[Shelf] = []
-        for y, x in zip(
+        for x, y in zip(
             np.indices(self.grid_size)[0].reshape(-1),
             np.indices(self.grid_size)[1].reshape(-1),
         ):
@@ -57,13 +57,13 @@ class Layout:
     def from_params(shelf_columns: int, shelf_rows: int, column_height: int) -> Layout:
         assert shelf_columns % 2 == 1, "Only odd number of shelf columns is supported"
         grid_size = (
-            (column_height + 1) * shelf_rows + 2,
-            (2 + 1) * shelf_columns + 1,
+            (2 + 1) * shelf_columns + 1,  # Width
+            (column_height + 1) * shelf_rows + 2,  # Height
         )
         column_height = column_height
         goals = [
-            (grid_size[1] // 2 - 1, grid_size[0] - 1),
-            (grid_size[1] // 2, grid_size[0] - 1),
+            (grid_size[0] // 2 - 1, grid_size[1] - 1),
+            (grid_size[0] // 2, grid_size[1] - 1),
         ]
 
         highways = np.zeros(grid_size, dtype=np.uint8)
@@ -71,9 +71,9 @@ class Layout:
         def highway_func(x, y):
             is_on_vertical_highway = x % 3 == 0
             is_on_horizontal_highway = y % (column_height + 1) == 0
-            is_on_delivery_row = y == grid_size[0] - 1
-            is_on_queue = (y > grid_size[0] - (column_height + 3)) and (
-                x == grid_size[1] // 2 - 1 or x == grid_size[1] // 2
+            is_on_delivery_row = y == grid_size[1] - 1
+            is_on_queue = (y > grid_size[1] - (column_height + 3)) and (
+                x == grid_size[0] // 2 - 1 or x == grid_size[0] // 2
             )
             return (
                 is_on_vertical_highway
@@ -82,9 +82,9 @@ class Layout:
                 or is_on_queue
             )
 
-        for x in range(grid_size[1]):
-            for y in range(grid_size[0]):
-                highways[y, x] = int(highway_func(x, y))
+        for x in range(grid_size[0]):
+            for y in range(grid_size[1]):
+                highways[x, y] = int(highway_func(x, y))
 
         return Layout(grid_size, goals, highways)
 
@@ -98,7 +98,7 @@ class Layout:
             assert len(line) == grid_width, "Layout must be rectangular"
 
         goals = []
-        grid_size = (grid_height, grid_width)
+        grid_size = (grid_width, grid_height)
         highways = np.zeros(grid_size, dtype=np.uint8)
 
         for y, line in enumerate(lines):
@@ -106,8 +106,8 @@ class Layout:
                 assert char.lower() in "gx."
                 if char.lower() == "g":
                     goals.append((x, y))
-                    highways[y, x] = 1
+                    highways[x, y] = 1
                 elif char.lower() == ".":
-                    highways[y, x] = 1
+                    highways[x, y] = 1
 
         return Layout(grid_size, goals, highways)

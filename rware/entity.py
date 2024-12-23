@@ -71,11 +71,11 @@ class Agent(Entity):
         elif self.dir == Direction.UP:
             return Point(self.x, max(0, self.y - 1))
         elif self.dir == Direction.DOWN:
-            return Point(self.x, min(grid_size[0] - 1, self.y + 1))
+            return Point(self.x, min(grid_size[1] - 1, self.y + 1))
         elif self.dir == Direction.LEFT:
             return Point(max(0, self.x - 1), self.y)
         elif self.dir == Direction.RIGHT:
-            return Point(min(grid_size[1] - 1, self.x + 1), self.y)
+            return Point(min(grid_size[0] - 1, self.x + 1), self.y)
 
         raise ValueError(
             f"Direction is {self.dir}. Should be one of {[v for v in Direction]}"

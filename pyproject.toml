@@ -6,9 +6,9 @@ readme = { content-type = "text/markdown", file = "README.md" }
 maintainers = [{ name = "Filippos Christianos" }]
 classifiers = [
     "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.10",
 ]
-requires-python = ">=3.7"
+requires-python = ">=3.10"
 urls = { github = "https://github.com/semitable/robotic-warehouse" }
 dependencies = ["numpy", "gymnasium", "pyglet<2", "networkx"]
 

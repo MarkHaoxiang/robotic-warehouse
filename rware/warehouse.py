@@ -390,46 +390,43 @@ class Warehouse(gym.Env):
         # write image observations
         if agent.id == 1:
             layers = []
+
             # first agent's observation --> update global observation layers
             for layer_type in self.image_observation_layers:
-                if layer_type == ImageLayer.SHELVES:
-                    layer = self.grid[_LAYER_SHELVES].copy().astype(np.float32)
-                    # set all occupied shelf cells to 1.0 (instead of shelf ID)
-                    layer[layer > 0.0] = 1.0
-                    # print("SHELVES LAYER")
-                elif layer_type == ImageLayer.REQUESTS:
-                    layer = np.zeros(self.grid_size, dtype=np.float32)
-                    for requested_shelf in self.request_queue:
-                        layer[requested_shelf.y, requested_shelf.x] = 1.0
-                    # print("REQUESTS LAYER")
-                elif layer_type == ImageLayer.AGENTS:
-                    layer = self.grid[_LAYER_AGENTS].copy().astype(np.float32)
-                    # set all occupied agent cells to 1.0 (instead of agent ID)
-                    layer[layer > 0.0] = 1.0
-                    # print("AGENTS LAYER")
-                elif layer_type == ImageLayer.AGENT_DIRECTION:
-                    layer = np.zeros(self.grid_size, dtype=np.float32)
-                    for ag in self.agents:
-                        agent_direction = ag.dir.value + 1
-                        layer[ag.x, ag.y] = float(agent_direction)
-                    # print("AGENT DIRECTIONS LAYER")
-                elif layer_type == ImageLayer.AGENT_LOAD:
-                    layer = np.zeros(self.grid_size, dtype=np.float32)
-                    for ag in self.agents:
-                        if ag.carrying_shelf is not None:
-                            layer[ag.x, ag.y] = 1.0
-                    # print("AGENT LOAD LAYER")
-                elif layer_type == ImageLayer.GOALS:
-                    layer = np.zeros(self.grid_size, dtype=np.float32)
-                    for goal_y, goal_x in self.goals:
-                        layer[goal_x, goal_y] = 1.0
-                    # print("GOALS LAYER")
-                elif layer_type == ImageLayer.ACCESSIBLE:
-                    layer = np.ones(self.grid_size, dtype=np.float32)
-                    for ag in self.agents:
-                        layer[ag.y, ag.x] = 0.0
-                else:
-                    raise ValueError(f"Unknown image layer type: {layer_type}")
+
+                match layer_type:
+                    case ImageLayer.SHELVES:
+                        layer = self.grid[_LAYER_SHELVES].copy().astype(np.float32)
+                        # set all occupied shelf cells to 1.0 (instead of shelf ID)
+                        layer[layer > 0.0] = 1.0
+                    case ImageLayer.REQUESTS:
+                        layer = np.zeros(self.grid_size, dtype=np.float32)
+                        for requested_shelf in self.request_queue:
+                            layer[*requested_shelf.pos] = 1.0
+                    case ImageLayer.AGENTS:
+                        layer = self.grid[_LAYER_AGENTS].copy().astype(np.float32)
+                        # set all occupied agent cells to 1.0 (instead of agent ID)
+                        layer[layer > 0.0] = 1.0
+                    case ImageLayer.AGENT_DIRECTION:
+                        layer = np.zeros(self.grid_size, dtype=np.float32)
+                        for ag in self.agents:
+                            agent_direction = ag.dir.value + 1
+                            layer[*ag.pos] = float(agent_direction)
+                    case ImageLayer.AGENT_LOAD:
+                        layer = np.zeros(self.grid_size, dtype=np.float32)
+                        for ag in self.agents:
+                            if ag.carrying_shelf is not None:
+                                layer[*ag.pos] = 1.0
+                    case ImageLayer.GOALS:
+                        layer = np.zeros(self.grid_size, dtype=np.float32)
+                        for goal in self.goals:
+                            layer[*goal] = 1.0
+                    case ImageLayer.ACCESSIBLE:
+                        layer = np.ones(self.grid_size, dtype=np.float32)
+                        for ag in self.agents:
+                            layer[*ag.pos] = 0.0
+                    case _:
+                        raise ValueError(f"Unknown image layer type: {layer_type}")
 
                 # pad with 0s for out-of-map cells
                 layer = np.pad(layer, self.sensor_range, mode="constant")
@@ -437,10 +434,10 @@ class Warehouse(gym.Env):
             self.global_layers = np.stack(layers)
 
         # global information was generated --> get information for agent
-        start_x = agent.pos.y
-        end_x = agent.pos.y + 2 * self.sensor_range + 1
-        start_y = agent.pos.x
-        end_y = agent.pos.x + 2 * self.sensor_range + 1
+        start_x = agent.pos.x
+        end_x = agent.pos.x + 2 * self.sensor_range + 1
+        start_y = agent.pos.y
+        end_y = agent.pos.y + 2 * self.sensor_range + 1
         obs = self.global_layers[:, start_x:end_x, start_y:end_y]
 
         if self.image_observation_directional:
@@ -468,8 +465,8 @@ class Warehouse(gym.Env):
         if (
             (min_x < 0)
             or (min_y < 0)
-            or (max_x > self.grid_size[1])
-            or (max_y > self.grid_size[0])
+            or (max_x > self.grid_size[0])
+            or (max_y > self.grid_size[1])
         ):
             padded_agents = np.pad(
                 self.grid[_LAYER_AGENTS], self.sensor_range, mode="constant"
@@ -487,22 +484,21 @@ class Warehouse(gym.Env):
             padded_agents = self.grid[_LAYER_AGENTS]
             padded_shelfs = self.grid[_LAYER_SHELVES]
 
-        agents = padded_agents[min_y:max_y, min_x:max_x].reshape(-1)
-        shelfs = padded_shelfs[min_y:max_y, min_x:max_x].reshape(-1)
+        agents = padded_agents[min_x:max_x, min_y:max_y].reshape(-1)
+        shelfs = padded_shelfs[min_x:max_x, min_y:max_y].reshape(-1)
 
         if self.fast_obs:
             # write flattened observations
             flatdim = gym.spaces.flatdim(self.observation_space[agent.id - 1])
             obs = _VectorWriter(flatdim)
 
-            if self.normalised_coordinates:
-                agent_x = agent.pos.x / (self.grid_size[1] - 1)
-                agent_y = agent.pos.y / (self.grid_size[0] - 1)
-            else:
-                agent_x = agent.pos.x
-                agent_y = agent.pos.y
+            pos = (
+                agent.pos.normalise(*self.grid_size)
+                if self.normalised_coordinates
+                else agent.pos
+            )
 
-            obs.write([agent_x, agent_y, int(agent.carrying_shelf is not None)])
+            obs.write([*pos, int(agent.carrying_shelf is not None)])
             direction = np.zeros(4)
             direction[agent.dir.value] = 1.0
             obs.write(direction)
@@ -537,15 +533,14 @@ class Warehouse(gym.Env):
 
         # write dictionary observations
         obs = {}
-        if self.normalised_coordinates:
-            agent_x = agent.pos.x / (self.grid_size[1] - 1)
-            agent_y = agent.pos.y / (self.grid_size[0] - 1)
-        else:
-            agent_x = agent.pos.x
-            agent_y = agent.pos.y
+        pos = (
+            agent.pos.normalise(*self.grid_size)
+            if self.normalised_coordinates
+            else agent.pos
+        )
         # --- self data
         obs["self"] = {
-            "location": np.array([agent_x, agent_y], dtype=np.int32),
+            "location": np.array(pos, dtype=np.int32),
             "carrying_shelf": [int(agent.carrying_shelf is not None)],
             "direction": agent.dir.value,
             "on_highway": [int(self.layout.is_highway(agent.pos))],
@@ -611,10 +606,10 @@ class Warehouse(gym.Env):
     def _recalc_grid(self):
         self.grid[:] = 0
         for s in self.shelves:
-            self.grid[_LAYER_SHELVES, s.pos.y, s.pos.x] = s.id
+            self.grid[_LAYER_SHELVES, *s.pos] = s.id
 
         for a in self.agents:
-            self.grid[_LAYER_AGENTS, a.pos.y, a.pos.x] = a.id
+            self.grid[_LAYER_AGENTS, *a.pos] = a.id
 
     def _update_layout(self, layout: Layout):
         layout.validate()
@@ -649,7 +644,7 @@ class Warehouse(gym.Env):
         agent_dirs = self.np_random.choice([d for d in Direction], size=self.n_agents)
         self.agents = [
             Agent(i + 1, Point(x, y), dir_, self.msg_bits)
-            for i, (y, x, dir_) in enumerate(zip(*agent_locs, agent_dirs))
+            for i, (x, y, dir_) in enumerate(zip(*agent_locs, agent_dirs))
         ]
 
         self._recalc_grid()
@@ -674,11 +669,6 @@ class Warehouse(gym.Env):
             else:
                 agent.req_action = Action(action)
 
-        # # stationary agents will certainly stay where they are
-        # stationary_agents = [agent for agent in self.agents if agent.action != Action.FORWARD]
-
-        # # forward agents will move only if they avoid collisions
-        # forward_agents = [agent for agent in self.agents if agent.action == Action.FORWARD]
         commited_agents = set()
 
         G = nx.DiGraph()
@@ -690,11 +680,11 @@ class Warehouse(gym.Env):
             if (
                 agent.carrying_shelf
                 and start != target
-                and self.grid[_LAYER_SHELVES, target[1], target[0]]
+                and self.grid[_LAYER_SHELVES, *target]
                 and not (
-                    self.grid[_LAYER_AGENTS, target[1], target[0]]
+                    self.grid[_LAYER_AGENTS, *target]
                     and self.agents[
-                        self.grid[_LAYER_AGENTS, target[1], target[0]] - 1
+                        self.grid[_LAYER_AGENTS, *target] - 1
                     ].carrying_shelf
                 )
             ):
@@ -719,13 +709,13 @@ class Warehouse(gym.Env):
                     continue
                 for edge in cycle:
                     start_node = edge[0]
-                    agent_id = self.grid[_LAYER_AGENTS, start_node[1], start_node[0]]
+                    agent_id = self.grid[_LAYER_AGENTS, start_node[0], start_node[1]]
                     if agent_id > 0:
                         commited_agents.add(agent_id)
             except nx.NetworkXNoCycle:
                 longest_path = nx.algorithms.dag_longest_path(comp)
                 for x, y in longest_path:
-                    agent_id = self.grid[_LAYER_AGENTS, y, x]
+                    agent_id = self.grid[_LAYER_AGENTS, x, y]
                     if agent_id:
                         commited_agents.add(agent_id)
 
@@ -748,7 +738,7 @@ class Warehouse(gym.Env):
             elif agent.req_action in [Action.LEFT, Action.RIGHT]:
                 agent.dir = agent.req_direction()
             elif agent.req_action == Action.TOGGLE_LOAD and not agent.carrying_shelf:
-                shelf_id = self.grid[_LAYER_SHELVES, agent.pos.y, agent.pos.x]
+                shelf_id = self.grid[_LAYER_SHELVES, *agent.pos]
                 if shelf_id:
                     agent.carrying_shelf = self.shelves[shelf_id - 1]
             elif agent.req_action == Action.TOGGLE_LOAD and agent.carrying_shelf:
@@ -762,8 +752,8 @@ class Warehouse(gym.Env):
         self._recalc_grid()
 
         shelf_delivered = False
-        for y, x in self.goals:
-            shelf_id = self.grid[_LAYER_SHELVES, x, y]
+        for goal in self.goals:
+            shelf_id = self.grid[_LAYER_SHELVES, *goal]
             if not shelf_id:
                 continue
             shelf = self.shelves[shelf_id - 1]
@@ -780,10 +770,10 @@ class Warehouse(gym.Env):
             if self.reward_type == RewardType.GLOBAL:
                 rewards += 1
             elif self.reward_type == RewardType.INDIVIDUAL:
-                agent_id = self.grid[_LAYER_AGENTS, x, y]
+                agent_id = self.grid[_LAYER_AGENTS, *goal]
                 rewards[agent_id - 1] += 1
             elif self.reward_type == RewardType.TWO_STAGE:
-                agent_id = self.grid[_LAYER_AGENTS, x, y]
+                agent_id = self.grid[_LAYER_AGENTS, *goal]
                 self.agents[agent_id - 1].has_delivered = True
                 rewards[agent_id - 1] += 0.5
 
@@ -852,7 +842,7 @@ class Warehouse(gym.Env):
                 elif layer_type == ImageLayer.REQUESTS:
                     layer = np.zeros(self.grid_size, dtype=np.float32)
                     for requested_shelf in self.request_queue:
-                        layer[requested_shelf.pos.y, requested_shelf.pos.x] = 1.0
+                        layer[*requested_shelf.pos] = 1.0
                 elif layer_type == ImageLayer.AGENTS:
                     layer = self.grid[_LAYER_AGENTS].copy().astype(np.float32)
                     # set all occupied agent cells to 1.0 (instead of agent ID)
@@ -861,20 +851,20 @@ class Warehouse(gym.Env):
                     layer = np.zeros(self.grid_size, dtype=np.float32)
                     for ag in self.agents:
                         agent_direction = ag.dir.value + 1
-                        layer[ag.pos.y, ag.pos.x] = float(agent_direction)
+                        layer[*ag.pos] = float(agent_direction)
                 elif layer_type == ImageLayer.AGENT_LOAD:
                     layer = np.zeros(self.grid_size, dtype=np.float32)
                     for ag in self.agents:
                         if ag.carrying_shelf is not None:
-                            layer[ag.pos.y, ag.pos.x] = 1.0
+                            layer[*ag.pos] = 1.0
                 elif layer_type == ImageLayer.GOALS:
                     layer = np.zeros(self.grid_size, dtype=np.float32)
-                    for goal_y, goal_x in self.goals:
-                        layer[goal_y, goal_x] = 1.0
+                    for goal in self.goals:
+                        layer[*goal] = 1.0
                 elif layer_type == ImageLayer.ACCESSIBLE:
                     layer = np.ones(self.grid_size, dtype=np.float32)
                     for ag in self.agents:
-                        layer[ag.pos.y, ag.pos.x] = 0.0
+                        layer[*ag.pos] = 0.0
                 else:
                     raise ValueError(f"Unknown image layer type: {layer_type}")
                 layers.append(layer)
