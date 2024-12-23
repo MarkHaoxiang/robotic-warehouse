@@ -11,7 +11,7 @@ from gymnasium import error
 import numpy as np
 import six
 
-from rware.warehouse import Direction
+from rware.warehouse import Warehouse, Direction
 
 if "Apple" in sys.version:
     if "DYLD_FALLBACK_LIBRARY_PATH" in os.environ:
@@ -126,7 +126,7 @@ class Viewer(object):
 
         self._draw_grid()
         self._draw_goals(env)
-        self._draw_shelfs(env)
+        self._draw_shelves(env)
         self._draw_agents(env)
 
         if return_rgb_array:
@@ -177,10 +177,10 @@ class Viewer(object):
             )
         batch.draw()
 
-    def _draw_shelfs(self, env):
+    def _draw_shelves(self, env: Warehouse):
         batch = pyglet.graphics.Batch()
 
-        for shelf in env.shelfs:
+        for shelf in env.shelves:
             x, y = shelf.x, shelf.y
             y = self.rows - y - 1  # pyglet rendering is reversed
             shelf_color = (

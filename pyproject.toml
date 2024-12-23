@@ -10,7 +10,7 @@ classifiers = [
 ]
 requires-python = ">=3.10"
 urls = { github = "https://github.com/semitable/robotic-warehouse" }
-dependencies = ["numpy", "gymnasium", "pyglet<2", "networkx"]
+dependencies = ["numpy", "gymnasium", "pyglet<2", "networkx", "six"]
 
 [build-system]
 requires = ["setuptools"]
