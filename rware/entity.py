@@ -1,9 +1,11 @@
 from enum import Enum
 import numpy as np
 
+from rware.utils.typing import Point
+
 
 _LAYER_AGENTS = 0
-_LAYER_SHELFS = 1
+_LAYER_SHELVES = 1
 
 
 class Direction(Enum):
@@ -22,18 +24,32 @@ class Action(Enum):
 
 
 class Entity:
-    def __init__(self, id_: int, x: int, y: int):
+    def __init__(self, id_: int, pos: Point):
         self.id = id_
-        self.prev_x = None
-        self.prev_y = None
-        self.x = x
-        self.y = y
+        self.prev_pos = pos
+        self.pos = pos
+
+    @property
+    def x(self) -> int:
+        return self.pos.x
+
+    @x.setter
+    def x(self, value: int) -> None:
+        self.pos = Point(value, self.pos.y)
+
+    @property
+    def y(self) -> int:
+        return self.pos.y
+
+    @y.setter
+    def y(self, value: int) -> None:
+        self.pos = Point(self.pos.x, value)
 
 
 class Agent(Entity):
 
-    def __init__(self, id_: int, x: int, y: int, dir_: Direction, msg_bits: int):
-        super().__init__(id_, x, y)
+    def __init__(self, id_: int, pos: Point, dir_: Direction, msg_bits: int):
+        super().__init__(id_, pos)
         self.dir = dir_
         self.message = np.zeros(msg_bits)
         self.req_action: Action | None = None
@@ -45,21 +61,21 @@ class Agent(Entity):
     @property
     def collision_layers(self):
         if self.loaded:
-            return (_LAYER_AGENTS, _LAYER_SHELFS)
+            return (_LAYER_AGENTS, _LAYER_SHELVES)
         else:
             return (_LAYER_AGENTS,)
 
-    def req_location(self, grid_size) -> tuple[int, int]:
+    def req_location(self, grid_size) -> Point:
         if self.req_action != Action.FORWARD:
-            return self.x, self.y
+            return self.pos
         elif self.dir == Direction.UP:
-            return self.x, max(0, self.y - 1)
+            return Point(self.x, max(0, self.y - 1))
         elif self.dir == Direction.DOWN:
-            return self.x, min(grid_size[0] - 1, self.y + 1)
+            return Point(self.x, min(grid_size[0] - 1, self.y + 1))
         elif self.dir == Direction.LEFT:
-            return max(0, self.x - 1), self.y
+            return Point(max(0, self.x - 1), self.y)
         elif self.dir == Direction.RIGHT:
-            return min(grid_size[1] - 1, self.x + 1), self.y
+            return Point(min(grid_size[1] - 1, self.x + 1), self.y)
 
         raise ValueError(
             f"Direction is {self.dir}. Should be one of {[v for v in Direction]}"
@@ -76,9 +92,9 @@ class Agent(Entity):
 
 
 class Shelf(Entity):
-    def __init__(self, id_: int, x: int, y: int):
-        super().__init__(id_, x, y)
+    def __init__(self, id_: int, pos: Point):
+        super().__init__(id_, pos)
 
     @property
     def collision_layers(self):
-        return (_LAYER_SHELFS,)
+        return (_LAYER_SHELVES,)

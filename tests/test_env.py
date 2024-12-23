@@ -109,12 +109,12 @@ def test_env_layout_from_params():
   [0. 0. 0. 0. 0. 0. 0.]]
 
  [[0. 0. 0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 1.]
   [0. 0. 0. 0. 0. 0. 0.]
   [0. 0. 0. 0. 0. 0. 0.]
   [0. 0. 0. 0. 0. 0. 0.]
-  [0. 0. 0. 0. 0. 0. 0.]
-  [0. 0. 0. 0. 0. 0. 0.]
-  [0. 1. 0. 0. 0. 1. 0.]]]""",
+  [0. 0. 0. 0. 0. 0. 1.]
+  [0. 0. 0. 0. 0. 0. 0.]]]""",
     )
 
 
@@ -571,8 +571,7 @@ def test_reproducibility(env_0):
         grid1 = []
         highways1 = []
         request_queue1 = []
-        player_x1 = []
-        player_y1 = []
+        player_pos1 = []
         player_carrying1 = []
         player_has_delivered1 = []
         env.seed(seed)
@@ -584,8 +583,7 @@ def test_reproducibility(env_0):
             request_queue1.append(
                 np.array([shelf.id for shelf in env.unwrapped.request_queue])
             )
-            player_x1.append([p.x for p in env.unwrapped.agents])
-            player_y1.append([p.y for p in env.unwrapped.agents])
+            player_pos1.append([p.pos for p in env.unwrapped.agents])
             player_carrying1.append([p.carrying_shelf for p in env.unwrapped.agents])
             player_has_delivered1.append(
                 [p.has_delivered for p in env.unwrapped.agents]
@@ -595,7 +593,7 @@ def test_reproducibility(env_0):
         grid2 = []
         highways2 = []
         request_queue2 = []
-        player_x2 = []
+        player_pos2 = []
         player_y2 = []
         player_carrying2 = []
         player_has_delivered2 = []
@@ -608,8 +606,7 @@ def test_reproducibility(env_0):
             request_queue2.append(
                 np.array([shelf.id for shelf in env.unwrapped.request_queue])
             )
-            player_x2.append([p.x for p in env.unwrapped.agents])
-            player_y2.append([p.y for p in env.unwrapped.agents])
+            player_pos1.append([p.pos for p in env.unwrapped.agents])
             player_carrying2.append([p.carrying_shelf for p in env.unwrapped.agents])
             player_has_delivered2.append(
                 [p.has_delivered for p in env.unwrapped.agents]
@@ -631,14 +628,10 @@ def test_reproducibility(env_0):
             assert np.array_equal(
                 rq1, rq2
             ), f"Request queue of env not identical for episode {i} with seed {seed}"
-        for i, (px1, px2) in enumerate(zip(player_x1, player_x2)):
+        for i, (p1, p2) in enumerate(zip(player_pos1, player_pos2)):
             assert np.array_equal(
-                px1, px2
-            ), f"Player x of env not identical for episode {i} with seed {seed}"
-        for i, (py1, py2) in enumerate(zip(player_y1, player_y2)):
-            assert np.array_equal(
-                py1, py2
-            ), f"Player y of env not identical for episode {i} with seed {seed}"
+                p1, p2
+            ), f"Player pos of env not identical for episode {i} with seed {seed}"
         for i, (pc1, pc2) in enumerate(zip(player_carrying1, player_carrying2)):
             assert np.array_equal(
                 pc1, pc2

@@ -3,35 +3,35 @@ from __future__ import annotations
 import numpy as np
 
 from rware.entity import Shelf
+from rware.utils.typing import Point
 
 _COLLISION_LAYERS = 2
 
 
 class Layout:
-    """A layout determines the initial setting of the warehouse."""
-
     def __init__(
         self,
         grid_size: tuple[int, int],
-        grid: np.ndarray,
-        goals: list[tuple[int, int]],
+        goals: list[Point],
         highways: np.ndarray,
     ):
+        """A layout determines the initial setting of the warehouse.
+
+        Args:
+            grid_size (tuple[int, int]): Shape of the map.
+            goals (list[Position]): List of goals
+            highways (np.ndarray): Boolean map indicator of positions that are NOT occupied by an intial shelf
+        """
         super().__init__()
         self.grid_size = grid_size
-        self._grid = grid
         self.goals = goals
-        self._highways = highways  # Boolean indicator
+        self._highways = highways
 
     def validate(self):
-        assert len(self.goals) >= 1, "At least one goal must be provided."
-        assert (
-            self._grid.shape[1],
-            self._grid.shape[2],
-        ) == self.grid_size, "Grid size does not match grid given"
+        assert len(self.goals) >= 1, "At least one goal position must be provided."
 
-    def is_highway(self, x, y) -> bool:
-        return self.highways[y, x]
+    def is_highway(self, pos: Point) -> bool:
+        return self.highways[pos.y, pos.x]
 
     def reset_shelves(self) -> list[Shelf]:
         shelf_counter = 0
@@ -40,14 +40,14 @@ class Layout:
             np.indices(self.grid_size)[0].reshape(-1),
             np.indices(self.grid_size)[1].reshape(-1),
         ):
-            if not self.is_highway(x, y):
+            if not self.is_highway(Point(x, y)):
                 shelf_counter += 1
-                shelves.append(Shelf(shelf_counter, x, y))
+                shelves.append(Shelf(shelf_counter, Point(x, y)))
         return shelves
 
-    @property
-    def grid(self) -> np.ndarray:
-        return self._grid.copy()
+    def generate_grid(self) -> np.ndarray:
+        """Generates an empty grid"""
+        return np.zeros((_COLLISION_LAYERS, *self.grid_size), dtype=np.int32)
 
     @property
     def highways(self) -> np.ndarray:
@@ -61,7 +61,6 @@ class Layout:
             (2 + 1) * shelf_columns + 1,
         )
         column_height = column_height
-        grid = np.zeros((_COLLISION_LAYERS, *grid_size), dtype=np.int32)
         goals = [
             (grid_size[1] // 2 - 1, grid_size[0] - 1),
             (grid_size[1] // 2, grid_size[0] - 1),
@@ -87,7 +86,7 @@ class Layout:
             for y in range(grid_size[0]):
                 highways[y, x] = int(highway_func(x, y))
 
-        return Layout(grid_size, grid, goals, highways)
+        return Layout(grid_size, goals, highways)
 
     @staticmethod
     def from_str(layout: str):
@@ -100,7 +99,6 @@ class Layout:
 
         goals = []
         grid_size = (grid_height, grid_width)
-        grid = np.zeros((_COLLISION_LAYERS, *grid_size), dtype=np.int32)
         highways = np.zeros(grid_size, dtype=np.uint8)
 
         for y, line in enumerate(lines):
@@ -112,4 +110,4 @@ class Layout:
                 elif char.lower() == ".":
                     highways[y, x] = 1
 
-        return Layout(grid_size, grid, goals, highways)
+        return Layout(grid_size, goals, highways)
