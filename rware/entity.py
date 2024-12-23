@@ -1,18 +1,11 @@
 from enum import Enum
 import numpy as np
 
-from rware.utils.typing import Point
+from rware.utils.typing import Point, Direction
 
 
 _LAYER_AGENTS = 0
 _LAYER_SHELVES = 1
-
-
-class Direction(Enum):
-    UP = 0
-    DOWN = 1
-    LEFT = 2
-    RIGHT = 3
 
 
 class Action(Enum):

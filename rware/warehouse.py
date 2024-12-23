@@ -10,8 +10,9 @@ import networkx as nx
 import numpy as np
 
 
-from rware.layout import Layout, Point
-from rware.entity import Action, Direction, Agent, Shelf, _LAYER_SHELVES, _LAYER_AGENTS
+from rware.utils.typing import Direction, Point
+from rware.layout import Layout
+from rware.entity import Action, Agent, Shelf, _LAYER_SHELVES, _LAYER_AGENTS
 
 
 class _VectorWriter:
@@ -630,22 +631,11 @@ class Warehouse(gym.Env):
             new_layout = options.get("layout", self.layout)
             self._update_layout(new_layout)
 
-        # Make shelves
+        # Make shelves and agents
         self.shelves = self.layout.reset_shelves()
-
-        # spawn agents at random locations
-        agent_locs = self.np_random.choice(
-            np.arange(self.grid_size[0] * self.grid_size[1]),
-            size=self.n_agents,
-            replace=False,
+        self.agents = self.layout.reset_agents(
+            (self.np_random, self.n_agents, self.msg_bits)
         )
-        agent_locs = np.unravel_index(agent_locs, self.grid_size)
-        # and direction
-        agent_dirs = self.np_random.choice([d for d in Direction], size=self.n_agents)
-        self.agents = [
-            Agent(i + 1, Point(x, y), dir_, self.msg_bits)
-            for i, (x, y, dir_) in enumerate(zip(*agent_locs, agent_dirs))
-        ]
 
         self._recalc_grid()
 
