@@ -6,8 +6,15 @@ import numpy as np
 import pytest
 from expecttest import assert_expected_inline
 
-
-from rware.warehouse import ObservationType, Warehouse, Direction, Action, RewardType
+from rware.layout import Layout
+from rware.warehouse import (
+    ObservationType,
+    Warehouse,
+    Direction,
+    Action,
+    RewardType,
+    ImageLayer,
+)
 
 
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -52,39 +59,19 @@ def test_env_layout_from_params():
     assert_expected_inline(
         layout,
         """\
-[[[0. 0. 0. 0.]
-  [0. 1. 1. 0.]
-  [0. 1. 1. 0.]
-  [0. 1. 1. 0.]
-  [0. 0. 0. 0.]
-  [0. 1. 1. 0.]
-  [0. 1. 1. 0.]
-  [0. 1. 1. 0.]
-  [0. 0. 0. 0.]
-  [0. 0. 0. 0.]
-  [0. 0. 0. 0.]
-  [0. 0. 0. 0.]
-  [0. 0. 0. 0.]
-  [0. 0. 0. 0.]]
+[[[0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+  [0. 1. 1. 1. 0. 1. 1. 1. 0. 0. 0. 0. 0. 0.]
+  [0. 1. 1. 1. 0. 1. 1. 1. 0. 0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]]
 
- [[0. 0. 0. 0.]
-  [0. 0. 0. 0.]
-  [0. 0. 0. 0.]
-  [0. 0. 0. 0.]
-  [0. 0. 0. 0.]
-  [0. 0. 0. 0.]
-  [0. 0. 0. 0.]
-  [0. 0. 0. 0.]
-  [0. 0. 0. 0.]
-  [0. 0. 0. 0.]
-  [0. 0. 0. 0.]
-  [0. 0. 0. 0.]
-  [0. 0. 0. 0.]
-  [0. 1. 1. 0.]]]""",
+ [[0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 1.]
+  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 1.]
+  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]]]""",
     )
 
 
-def test_env_layout_from_params():
+def test_env_layout_from_str():
     layout = """
 .......
 ...x...
@@ -94,7 +81,7 @@ def test_env_layout_from_params():
 ...x...
 .g...g.
 """
-    env = Warehouse(shelf_columns=3, column_height=8, shelf_rows=1, layout=layout)
+    env = Warehouse(layout=layout)
     env.reset()
     layout = str(env.get_global_image())
     assert_expected_inline(
@@ -115,6 +102,70 @@ def test_env_layout_from_params():
   [0. 0. 0. 0. 0. 0. 0.]
   [0. 0. 0. 0. 0. 0. 1.]
   [0. 0. 0. 0. 0. 0. 0.]]]""",
+    )
+
+
+def test_env_layout_from_image(env_0: Warehouse):
+    env_0.reset()
+    layers = [
+        ImageLayer.SHELVES,
+        ImageLayer.GOALS,
+        ImageLayer.AGENTS,
+        ImageLayer.AGENT_DIRECTION,
+    ]
+    baseline_grid = env_0.get_global_image(image_layers=layers)
+    layout = Layout.from_image(baseline_grid, layers)
+    env = Warehouse(layout=layout)
+    env.reset()
+    grid = env.get_global_image(image_layers=layers)
+
+    assert str(grid) == str(baseline_grid)
+
+    layout = str(env.get_global_image(recompute=True))
+    assert_expected_inline(
+        layout,
+        """\
+[[[0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
+   0. 0. 0. 0. 0. 0.]
+  [0. 1. 1. 1. 1. 1. 1. 1. 1. 0. 1. 1. 1. 1. 1. 1. 1. 1. 0. 1. 1. 1. 1.
+   1. 1. 1. 1. 0. 0.]
+  [0. 1. 1. 1. 1. 1. 1. 1. 1. 0. 1. 1. 1. 1. 1. 1. 1. 1. 0. 1. 1. 1. 1.
+   1. 1. 1. 1. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
+   0. 0. 0. 0. 0. 0.]
+  [0. 1. 1. 1. 1. 1. 1. 1. 1. 0. 1. 1. 1. 1. 1. 1. 1. 1. 0. 0. 0. 0. 0.
+   0. 0. 0. 0. 0. 0.]
+  [0. 1. 1. 1. 1. 1. 1. 1. 1. 0. 1. 1. 1. 1. 1. 1. 1. 1. 0. 0. 0. 0. 0.
+   0. 0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
+   0. 0. 0. 0. 0. 0.]
+  [0. 1. 1. 1. 1. 1. 1. 1. 1. 0. 1. 1. 1. 1. 1. 1. 1. 1. 0. 1. 1. 1. 1.
+   1. 1. 1. 1. 0. 0.]
+  [0. 1. 1. 1. 1. 1. 1. 1. 1. 0. 1. 1. 1. 1. 1. 1. 1. 1. 0. 1. 1. 1. 1.
+   1. 1. 1. 1. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
+   0. 0. 0. 0. 0. 0.]]
+
+ [[0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
+   0. 0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
+   0. 0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
+   0. 0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
+   0. 0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
+   0. 0. 0. 0. 0. 1.]
+  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
+   0. 0. 0. 0. 0. 1.]
+  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
+   0. 0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
+   0. 0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
+   0. 0. 0. 0. 0. 0.]
+  [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
+   0. 0. 0. 0. 0. 0.]]]""",
     )
 
 
@@ -447,112 +498,38 @@ def test_inactivity_2(env_0):
     assert done
 
 
-def test_fast_obs_0():
+@pytest.mark.parametrize("n_agents", [2, 3])
+@pytest.mark.parametrize("msg_bits", [0, 2])
+def test_fast_obs(n_agents: int, msg_bits: int):
     env = Warehouse(
         shelf_columns=3,
         column_height=8,
         shelf_rows=3,
-        n_agents=2,
-        msg_bits=0,
-        sensor_range=1,
-        request_queue_size=5,
-        max_inactivity_steps=10,
-        max_steps=None,
-        reward_type=RewardType.GLOBAL,
+        n_agents=n_agents,
+        msg_bits=msg_bits,
         observation_type=ObservationType.DICT,
     )
-    env.reset()
+    env.reset(seed=0)
 
     slow_obs_space = env.observation_space
 
     for _ in range(10):
+        env._use_slow_obs()
         slow_obs = [env._make_obs(agent) for agent in env.agents]
         env._use_fast_obs()
         fast_obs = [env._make_obs(agent) for agent in env.agents]
-        assert len(fast_obs) == 2
-        assert len(slow_obs) == 2
+
+        assert len(fast_obs) == len(slow_obs) == env.n_agents
 
         flattened_slow = [
             gym.spaces.flatten(osp, obs) for osp, obs in zip(slow_obs_space, slow_obs)
         ]
-        for i in range(len(fast_obs)):
-            assert list(fast_obs[i]) == list(flattened_slow[i])
+        for slow, fast in zip(flattened_slow, fast_obs):
+            slow, fast = slow.tolist(), fast.tolist()
+            slow.sort()
+            fast.sort()
+            assert fast == slow
 
-        env._use_slow_obs()
-        env.step(env.action_space.sample())
-
-
-def test_fast_obs_1():
-    env = Warehouse(
-        shelf_columns=3,
-        column_height=8,
-        shelf_rows=3,
-        n_agents=3,
-        msg_bits=0,
-        sensor_range=1,
-        request_queue_size=5,
-        max_inactivity_steps=10,
-        max_steps=None,
-        reward_type=RewardType.GLOBAL,
-        observation_type=ObservationType.DICT,
-    )
-    env.reset()
-
-    slow_obs_space = env.observation_space
-
-    for _ in range(10):
-        slow_obs = [env._make_obs(agent) for agent in env.agents]
-        env._use_fast_obs()
-        fast_obs = [env._make_obs(agent) for agent in env.agents]
-        assert len(fast_obs) == 3
-        assert len(slow_obs) == 3
-
-        flattened_slow = [
-            gym.spaces.flatten(osp, obs) for osp, obs in zip(slow_obs_space, slow_obs)
-        ]
-
-        for i in range(len(fast_obs)):
-            assert list(fast_obs[i]) == list(flattened_slow[i])
-
-        env._use_slow_obs()
-        env.step(env.action_space.sample())
-
-
-def test_fast_obs_2():
-    env = Warehouse(
-        shelf_columns=3,
-        column_height=8,
-        shelf_rows=3,
-        n_agents=3,
-        msg_bits=2,
-        sensor_range=1,
-        request_queue_size=5,
-        max_inactivity_steps=10,
-        max_steps=None,
-        reward_type=RewardType.GLOBAL,
-        observation_type=ObservationType.DICT,
-    )
-    env.reset()
-
-    slow_obs_space = env.observation_space
-
-    for _ in range(10):
-        slow_obs = [env._make_obs(agent) for agent in env.agents]
-        env._use_fast_obs()
-        fast_obs = [env._make_obs(agent) for agent in env.agents]
-        assert len(fast_obs) == 3
-        assert len(slow_obs) == 3
-
-        flattened_slow = [
-            gym.spaces.flatten(osp, obs) for osp, obs in zip(slow_obs_space, slow_obs)
-        ]
-
-        for i in range(len(fast_obs)):
-            assert np.array_equal(
-                fast_obs[i].astype(np.int32), flattened_slow[i].astype(np.int32)
-            )
-
-        env._use_slow_obs()
         env.step(env.action_space.sample())
 
 
@@ -587,7 +564,6 @@ def test_reproducibility(env_0):
         highways2 = []
         request_queue2 = []
         player_pos2 = []
-        player_y2 = []
         player_carrying2 = []
         player_has_delivered2 = []
         env.seed(seed)

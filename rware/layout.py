@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from rware.entity import Agent, Shelf
-from rware.utils.typing import Point, Direction
+from rware.utils.typing import Point, Direction, ImageLayer
 
 _COLLISION_LAYERS = 2
 
@@ -32,6 +32,16 @@ class Layout:
 
     def validate(self):
         assert len(self.goals) >= 1, "At least one goal position must be provided."
+        assert (
+            self._highways.shape[0] == self.grid_size[0]
+        ), "Implicit grid_size:width from highways does not match grid_size."
+        assert (
+            self._highways.shape[1] == self.grid_size[1]
+        ), "Implicit grid_size:height from highways does not match grid_size."
+        for goal in self.goals:
+            assert self.is_highway(
+                goal
+            ), f"A shelf cannot be placed onto a goal allocated position. Position {goal}"
 
     def is_highway(self, pos: Point) -> bool:
         return self.highways[*pos]
@@ -48,12 +58,14 @@ class Layout:
                 shelves.append(Shelf(shelf_counter, Point(x, y)))
         return shelves
 
-    def reset_agents(self, params: tuple[np.random.Generator, int, int] | None = None):
+    def reset_agents(
+        self, msg_bits: int, params: tuple[np.random.Generator, int] | None = None
+    ):
         if self._agents is None:
             assert (
                 params is not None
             ), "If agent positions are randomly generated, extra parameters."
-            rng, n_agents, msg_bits = params
+            rng, n_agents = params
             agent_locs = rng.choice(
                 np.arange(self.grid_size[0] * self.grid_size[1]),
                 size=n_agents,
@@ -69,7 +81,7 @@ class Layout:
         else:
             # TODO markli: Validate
             agents = [
-                Agent(i + 1, Point(*pos), dir_)
+                Agent(i + 1, Point(*pos), dir_, msg_bits)
                 for i, (pos, dir_) in enumerate(self._agents)
             ]
         return agents
@@ -118,7 +130,7 @@ class Layout:
         return Layout(grid_size, goals, highways)
 
     @staticmethod
-    def from_str(layout: str):
+    def from_str(layout: str) -> Layout:
         layout = layout.strip().replace(" ", "")
         grid_height = layout.count("\n") + 1
         lines = layout.split("\n")
@@ -140,3 +152,51 @@ class Layout:
                     highways[x, y] = 1
 
         return Layout(grid_size, goals, highways)
+
+    @staticmethod
+    def from_image(
+        image: np.ndarray,
+        image_layers: list[ImageLayer] = [ImageLayer.SHELVES, ImageLayer.GOALS],
+    ) -> Layout:
+        """The partial inverse of Warehouse.get_global_image
+
+        Args:
+            image (np.ndarray): An image of shape (C, W, H).
+            layers (list: ImageLayer): Describes the channels used to generate image. C - len(layers). Highways is assumed to be the inverse of shelves. If AGENT is present but no AGENT_DIRECTION is given, then all directions are assumed pointing up.
+
+
+        Returns:
+            Layout: Layout that would generate image.
+        """
+        _, w, h = image.shape
+
+        # Initial grid size
+        grid_size = (w, h)
+
+        # Shelves
+        assert (
+            ImageLayer.SHELVES in image_layers
+        ), f"Requires SHELVES as a channel within image, but recieved {image_layers}"
+        shelves = image[image_layers.index(ImageLayer.SHELVES)]
+        highways = 1 - shelves
+
+        # Goals
+        assert (
+            ImageLayer.GOALS in image_layers
+        ), f"Requires GOALS as a channel within image, but recieved {image_layers}"
+        goal_layer = image[image_layers.index(ImageLayer.GOALS)]
+        positions = np.argwhere(goal_layer)
+        goals = [Point(*pos.tolist()) for pos in positions]
+
+        # Agents
+        agents = None
+        if ImageLayer.AGENTS in image_layers:
+            agent_layer = image[image_layers.index(ImageLayer.AGENTS)]
+            positions = np.argwhere(agent_layer)
+            agents = [Point(*pos.tolist()) for pos in positions]
+            if ImageLayer.AGENT_DIRECTION in image_layers:
+                directions = image[image_layers.index(ImageLayer.AGENT_DIRECTION)]
+                agents = [(pos, Direction(directions[*pos] - 1)) for pos in agents]
+            else:
+                agents = [(pos, Direction.UP) for pos in agents]
+        return Layout(grid_size, goals, highways, agents)
