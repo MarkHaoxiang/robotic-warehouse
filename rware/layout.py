@@ -75,7 +75,9 @@ class Layout:
             # And direction
             agent_dirs = rng.choice([d for d in Direction], size=n_agents)
             agents = [
-                Agent(i + 1, Point(x, y), dir_, msg_bits)
+                Agent(
+                    i + 1, Point(x, y), dir_, msg_bits
+                )  # IDs start from 1 since 0 represents nothing in observation
                 for i, (x, y, dir_) in enumerate(zip(*agent_locs, agent_dirs))
             ]
         else:

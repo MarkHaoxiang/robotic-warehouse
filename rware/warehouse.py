@@ -472,7 +472,7 @@ class Warehouse(gym.Env):
             padded_shelfs = self.grid[_LAYER_SHELVES]
 
         agents = padded_agents[min_x:max_x, min_y:max_y].reshape(-1)
-        shelfs = padded_shelfs[min_x:max_x, min_y:max_y].reshape(-1)
+        shelves = padded_shelfs[min_x:max_x, min_y:max_y].reshape(-1)
 
         if self.fast_obs:
             # write flattened observations
@@ -497,7 +497,7 @@ class Warehouse(gym.Env):
             # 'has_shelf': MultiBinary(1),
             # 'shelf_requested': MultiBinary(1),
 
-            for i, (id_agent, id_shelf) in enumerate(zip(agents, shelfs)):
+            for i, (id_agent, id_shelf) in enumerate(zip(agents, shelves)):
                 if id_agent == 0:
                     # no agent, direction, or message
                     obs.write([0.0])  # no agent present
@@ -551,7 +551,7 @@ class Warehouse(gym.Env):
                 )
 
         # find neighboring shelfs:
-        for i, id_ in enumerate(shelfs):
+        for i, id_ in enumerate(shelves):
             if id_ == 0:
                 obs["sensors"][i]["has_shelf"] = [0]
                 obs["sensors"][i]["shelf_requested"] = [0]
