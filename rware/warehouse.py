@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from enum import Enum
 from typing import Any
+import warnings
 
 import gymnasium as gym
 from gymnasium.utils import seeding
@@ -147,6 +148,14 @@ class Warehouse(gym.Env):
                 self.layout = Layout.from_str(layout)
             else:
                 self.layout = layout
+        if self.layout._agents is not None:
+            n = len(self.layout._agents)
+            if n != n_agents:
+                warnings.warn(
+                    f"Provided layout agents {n} does not match n_agents {n_agents}."
+                )
+                n_agents = n
+
         self._update_layout(self.layout)
 
         self.n_agents = n_agents
