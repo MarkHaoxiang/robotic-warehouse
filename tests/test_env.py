@@ -7,8 +7,8 @@ import pytest
 from expecttest import assert_expected_inline
 
 from rware.layout import Layout
+from rware.observation import ObservationType
 from rware.warehouse import (
-    ObservationType,
     Warehouse,
     Direction,
     Action,
@@ -276,6 +276,35 @@ def test_action_space_3():
     env.step(env.action_space.sample())
 
 
+@pytest.mark.parametrize(
+    "observation_type",
+    [
+        ObservationType.DICT,
+        ObservationType.FLATTENED,
+        ObservationType.IMAGE,
+        ObservationType.IMAGE_DICT,
+    ],
+)
+def test_obs_space_contains(observation_type: ObservationType):
+    env = Warehouse(
+        shelf_columns=1,
+        column_height=3,
+        shelf_rows=3,
+        n_agents=10,
+        msg_bits=5,
+        sensor_range=1,
+        request_queue_size=5,
+        max_inactivity_steps=None,
+        max_steps=None,
+        observation_type=observation_type,
+        reward_type=RewardType.GLOBAL,
+    )
+    obs, _ = env.reset()
+    for _ in range(100):
+        obs, _, _, _, _ = env.step(env.action_space.sample())
+        assert env.observation_space.contains(obs)
+
+
 def test_obs_space_0():
     env = Warehouse(
         shelf_columns=1,
@@ -358,25 +387,6 @@ def test_obs_space_0():
                     ), f"{obs[i]['sensors'][j][key]} is not contained in {env.observation_space[i]['sensors'][j][key]}"
 
 
-def test_obs_space_1():
-    env = Warehouse(
-        shelf_columns=1,
-        column_height=3,
-        shelf_rows=3,
-        n_agents=10,
-        msg_bits=5,
-        sensor_range=1,
-        request_queue_size=5,
-        max_inactivity_steps=None,
-        max_steps=None,
-        reward_type=RewardType.GLOBAL,
-    )
-    obs, _ = env.reset()
-    for _ in range(200):
-        obs, _, _, _, _ = env.step(env.action_space.sample())
-        assert env.observation_space.contains(obs)
-
-
 # def test_obs_space_2():
 #     env = Warehouse(
 #         shelf_columns=1,
@@ -393,46 +403,6 @@ def test_obs_space_1():
 #     obs, _ = env.reset()
 #     for s, o in zip(env.observation_space, obs):
 #         assert len(gym.spaces.flatten(s, o)) == env._obs_length
-
-
-def test_obs_space_3():
-    env = Warehouse(
-        shelf_columns=1,
-        column_height=3,
-        shelf_rows=3,
-        n_agents=10,
-        msg_bits=5,
-        sensor_range=1,
-        request_queue_size=5,
-        max_inactivity_steps=None,
-        max_steps=None,
-        observation_type=ObservationType.IMAGE,
-        reward_type=RewardType.GLOBAL,
-    )
-    obs, _ = env.reset()
-    for _ in range(200):
-        obs, _, _, _, _ = env.step(env.action_space.sample())
-        assert env.observation_space.contains(obs)
-
-
-def test_obs_space_4():
-    env = Warehouse(
-        shelf_columns=1,
-        column_height=3,
-        shelf_rows=3,
-        n_agents=10,
-        msg_bits=5,
-        sensor_range=1,
-        request_queue_size=5,
-        max_inactivity_steps=None,
-        max_steps=None,
-        observation_type=ObservationType.IMAGE_DICT,
-        reward_type=RewardType.GLOBAL,
-    )
-    obs, _ = env.reset()
-    for _ in range(200):
-        obs, _, _, _, _ = env.step(env.action_space.sample())
-        assert env.observation_space.contains(obs)
 
 
 def test_inactivity_0(env_0):
