@@ -52,18 +52,19 @@ class _VectorWriter:
 class _Observation(ABC):
     def __init__(self, warehouse: Warehouse):
         super().__init__()
-        self.warehouse = warehouse
-        self.msg_bits = self.warehouse.msg_bits
-        self.sensor_range = self.warehouse.sensor_range
-        self.normalised_coordinates = self.warehouse.normalised_coordinates
-        self.n_agents = self.warehouse.n_agents
-        warehouse.grid_size = self.warehouse.grid_size
-
-        self.space = self._reset_space(warehouse)
+        self.space = self.reset_space(warehouse)
 
     @classmethod
     def from_warehouse(cls, warehouse: Warehouse):
         return cls(warehouse)
+
+    def reset_space(self, warehouse: Warehouse):
+        self.msg_bits = warehouse.msg_bits
+        self.sensor_range = warehouse.sensor_range
+        self.normalised_coordinates = warehouse.normalised_coordinates
+        self.n_agents = warehouse.n_agents
+        space = self._reset_space(warehouse)
+        return space
 
     @abstractmethod
     def _reset_space(self, warehouse: Warehouse) -> Space:
@@ -153,37 +154,7 @@ class DictObservation(_Observation):
         )
 
     def make_obs(self, agent: Agent, warehouse: Warehouse):
-        min_x = agent.pos.x - self.sensor_range
-        max_x = agent.pos.x + self.sensor_range + 1
-
-        min_y = agent.pos.y - self.sensor_range
-        max_y = agent.pos.y + self.sensor_range + 1
-
-        # sensors
-        if (
-            (min_x < 0)
-            or (min_y < 0)
-            or (max_x > warehouse.grid_size[0])
-            or (max_y > warehouse.grid_size[1])
-        ):
-            padded_agents = np.pad(
-                warehouse.grid[_LAYER_AGENTS], self.sensor_range, mode="constant"
-            )
-            padded_shelfs = np.pad(
-                warehouse.grid[_LAYER_SHELVES], self.sensor_range, mode="constant"
-            )
-            # + self.sensor_range due to padding
-            min_x += self.sensor_range
-            max_x += self.sensor_range
-            min_y += self.sensor_range
-            max_y += self.sensor_range
-
-        else:
-            padded_agents = warehouse.grid[_LAYER_AGENTS]
-            padded_shelfs = warehouse.grid[_LAYER_SHELVES]
-
-        agents = padded_agents[min_x:max_x, min_y:max_y].reshape(-1)
-        shelves = padded_shelfs[min_x:max_x, min_y:max_y].reshape(-1)
+        agents, shelves = make_local_obs(agent, warehouse, self.sensor_range)
 
         # write dictionary observations
         obs = {}
@@ -236,7 +207,7 @@ class FlattenedObservation(_Observation):
         super().__init__(warehouse)
 
     def _reset_space(self, warehouse):
-        observation_space = DictObservation(self.warehouse).space
+        observation_space = DictObservation(warehouse).space
 
         ma_spaces = []
         for sa_obs in observation_space:
@@ -253,37 +224,7 @@ class FlattenedObservation(_Observation):
         return gym.spaces.Tuple(tuple(ma_spaces))
 
     def make_obs(self, agent: Agent, warehouse: Warehouse):
-        min_x = agent.pos.x - self.sensor_range
-        max_x = agent.pos.x + self.sensor_range + 1
-
-        min_y = agent.pos.y - self.sensor_range
-        max_y = agent.pos.y + self.sensor_range + 1
-
-        # sensors
-        if (
-            (min_x < 0)
-            or (min_y < 0)
-            or (max_x > warehouse.grid_size[0])
-            or (max_y > warehouse.grid_size[1])
-        ):
-            padded_agents = np.pad(
-                warehouse.grid[_LAYER_AGENTS], self.sensor_range, mode="constant"
-            )
-            padded_shelfs = np.pad(
-                warehouse.grid[_LAYER_SHELVES], self.sensor_range, mode="constant"
-            )
-            # + self.sensor_range due to padding
-            min_x += self.sensor_range
-            max_x += self.sensor_range
-            min_y += self.sensor_range
-            max_y += self.sensor_range
-
-        else:
-            padded_agents = warehouse.grid[_LAYER_AGENTS]
-            padded_shelfs = warehouse.grid[_LAYER_SHELVES]
-
-        agents = padded_agents[min_x:max_x, min_y:max_y].reshape(-1)
-        shelves = padded_shelfs[min_x:max_x, min_y:max_y].reshape(-1)
+        agents, shelves = make_local_obs(agent, warehouse, self.sensor_range)
 
         # write flattened observations
         flatdim = gym.spaces.flatdim(self.space[agent.id - 1])
@@ -364,50 +305,14 @@ class ImageObservation(_Observation):
             tuple([gym.spaces.Box(min_obs, max_obs, dtype=np.float32)] * self.n_agents)
         )
 
-    def make_obs(self, agent, warehouse):
+    def make_obs(self, agent: Agent, warehouse: Warehouse):
         if agent.id == 1:
-            layers = []
-
             # first agent's observation --> update global observation layers
-            for layer_type in warehouse.image_observation_layers:
-
-                match layer_type:
-                    case ImageLayer.SHELVES:
-                        layer = warehouse.grid[_LAYER_SHELVES].copy().astype(np.float32)
-                        # set all occupied shelf cells to 1.0 (instead of shelf ID)
-                        layer[layer > 0.0] = 1.0
-                    case ImageLayer.REQUESTS:
-                        layer = np.zeros(warehouse.grid_size, dtype=np.float32)
-                        for requested_shelf in warehouse.request_queue:
-                            layer[*requested_shelf.pos] = 1.0
-                    case ImageLayer.AGENTS:
-                        layer = warehouse.grid[_LAYER_AGENTS].copy().astype(np.float32)
-                        # set all occupied agent cells to 1.0 (instead of agent ID)
-                        layer[layer > 0.0] = 1.0
-                    case ImageLayer.AGENT_DIRECTION:
-                        layer = np.zeros(warehouse.grid_size, dtype=np.float32)
-                        for ag in warehouse.agents:
-                            agent_direction = ag.dir.value + 1
-                            layer[*ag.pos] = float(agent_direction)
-                    case ImageLayer.AGENT_LOAD:
-                        layer = np.zeros(warehouse.grid_size, dtype=np.float32)
-                        for ag in warehouse.agents:
-                            if ag.carrying_shelf is not None:
-                                layer[*ag.pos] = 1.0
-                    case ImageLayer.GOALS:
-                        layer = np.zeros(warehouse.grid_size, dtype=np.float32)
-                        for goal in warehouse.goals:
-                            layer[*goal] = 1.0
-                    case ImageLayer.ACCESSIBLE:
-                        layer = np.ones(warehouse.grid_size, dtype=np.float32)
-                        for ag in warehouse.agents:
-                            layer[*ag.pos] = 0.0
-                    case _:
-                        raise ValueError(f"Unknown image layer type: {layer_type}")
-
-                # pad with 0s for out-of-map cells
-                layer = np.pad(layer, self.sensor_range, mode="constant")
-                layers.append(layer)
+            layers = make_global_image(
+                warehouse,
+                image_layers=self.image_observation_layers,
+                padding_size=self.sensor_range,
+            )
             self.global_layers = np.stack(layers)
 
         # global information was generated --> get information for agent
@@ -417,7 +322,7 @@ class ImageObservation(_Observation):
         end_y = agent.pos.y + 2 * self.sensor_range + 1
         obs = self.global_layers[:, start_x:end_x, start_y:end_y]
 
-        if warehouse.image_observation_directional:
+        if self.directional:
             # rotate image to be in direction of agent
             if agent.dir == Direction.DOWN:
                 # rotate by 180 degrees (clockwise)
@@ -485,3 +390,85 @@ class ImageDictObservation(_Observation):
             "image": image_obs,
             "features": feature_obs.vector,
         }
+
+
+def make_local_obs(agent: Agent, warehouse: Warehouse, sensor_range: int):
+    min_x = agent.pos.x - sensor_range
+    max_x = agent.pos.x + sensor_range + 1
+
+    min_y = agent.pos.y - sensor_range
+    max_y = agent.pos.y + sensor_range + 1
+
+    # sensors
+    if (
+        (min_x < 0)
+        or (min_y < 0)
+        or (max_x > warehouse.grid_size[0])
+        or (max_y > warehouse.grid_size[1])
+    ):
+        padded_agents = np.pad(
+            warehouse.grid[_LAYER_AGENTS], sensor_range, mode="constant"
+        )
+        padded_shelves = np.pad(
+            warehouse.grid[_LAYER_SHELVES], sensor_range, mode="constant"
+        )
+        # + self.sensor_range due to padding
+        min_x += sensor_range
+        max_x += sensor_range
+        min_y += sensor_range
+        max_y += sensor_range
+
+    else:
+        padded_agents = warehouse.grid[_LAYER_AGENTS]
+        padded_shelves = warehouse.grid[_LAYER_SHELVES]
+
+    agents = padded_agents[min_x:max_x, min_y:max_y].reshape(-1)
+    shelves = padded_shelves[min_x:max_x, min_y:max_y].reshape(-1)
+    return agents, shelves
+
+
+def make_global_image(
+    warehouse: Warehouse,
+    image_layers: list[ImageLayer],
+    padding_size: int | None = None,
+):
+    layers = []
+    for layer_type in image_layers:
+        match layer_type:
+            case ImageLayer.SHELVES:
+                layer = warehouse.grid[_LAYER_SHELVES].copy().astype(np.float32)
+                # set all occupied shelf cells to 1.0 (instead of shelf ID)
+                layer[layer > 0.0] = 1.0
+            case ImageLayer.REQUESTS:
+                layer = np.zeros(warehouse.grid_size, dtype=np.float32)
+                for requested_shelf in warehouse.request_queue:
+                    layer[*requested_shelf.pos] = 1.0
+            case ImageLayer.AGENTS:
+                layer = warehouse.grid[_LAYER_AGENTS].copy().astype(np.float32)
+                # set all occupied agent cells to 1.0 (instead of agent ID)
+                layer[layer > 0.0] = 1.0
+            case ImageLayer.AGENT_DIRECTION:
+                layer = np.zeros(warehouse.grid_size, dtype=np.float32)
+                for ag in warehouse.agents:
+                    agent_direction = ag.dir.value + 1
+                    layer[*ag.pos] = float(agent_direction)
+            case ImageLayer.AGENT_LOAD:
+                layer = np.zeros(warehouse.grid_size, dtype=np.float32)
+                for ag in warehouse.agents:
+                    if ag.carrying_shelf is not None:
+                        layer[*ag.pos] = 1.0
+            case ImageLayer.GOALS:
+                layer = np.zeros(warehouse.grid_size, dtype=np.float32)
+                for goal in warehouse.goals:
+                    layer[*goal] = 1.0
+            case ImageLayer.ACCESSIBLE:
+                layer = np.ones(warehouse.grid_size, dtype=np.float32)
+                for ag in warehouse.agents:
+                    layer[*ag.pos] = 0.0
+            case _:
+                raise ValueError(f"Unknown image layer type: {layer_type}")
+        # pad with 0s for out-of-map cells
+        if padding_size:
+            layer = np.pad(layer, padding_size, mode="constant")
+        layers.append(layer)
+    return layers

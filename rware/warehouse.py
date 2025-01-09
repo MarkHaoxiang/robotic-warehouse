@@ -10,10 +10,10 @@ import networkx as nx
 import numpy as np
 
 
-from rware.utils.typing import Direction, ImageLayer
+from rware.utils.typing import ImageLayer
 from rware.layout import Layout
 from rware.entity import Action, Agent, Shelf, _LAYER_SHELVES, _LAYER_AGENTS
-from rware.observation import ObservationType, _VectorWriter
+from rware.observation import ObservationType, make_global_image
 
 
 class RewardType(Enum):
@@ -399,41 +399,7 @@ class Warehouse(gym.Env):
              shape (if doesn't fit throw exception)
         """
         if recompute or self.global_image is None:
-            layers = []
-            for layer_type in image_layers:
-                if layer_type == ImageLayer.SHELVES:
-                    layer = self.grid[_LAYER_SHELVES].copy().astype(np.float32)
-                    # set all occupied shelf cells to 1.0 (instead of shelf ID)
-                    layer[layer > 0.0] = 1.0
-                elif layer_type == ImageLayer.REQUESTS:
-                    layer = np.zeros(self.grid_size, dtype=np.float32)
-                    for requested_shelf in self.request_queue:
-                        layer[*requested_shelf.pos] = 1.0
-                elif layer_type == ImageLayer.AGENTS:
-                    layer = self.grid[_LAYER_AGENTS].copy().astype(np.float32)
-                    # set all occupied agent cells to 1.0 (instead of agent ID)
-                    layer[layer > 0.0] = 1.0
-                elif layer_type == ImageLayer.AGENT_DIRECTION:
-                    layer = np.zeros(self.grid_size, dtype=np.float32)
-                    for ag in self.agents:
-                        agent_direction = ag.dir.value + 1
-                        layer[*ag.pos] = float(agent_direction)
-                elif layer_type == ImageLayer.AGENT_LOAD:
-                    layer = np.zeros(self.grid_size, dtype=np.float32)
-                    for ag in self.agents:
-                        if ag.carrying_shelf is not None:
-                            layer[*ag.pos] = 1.0
-                elif layer_type == ImageLayer.GOALS:
-                    layer = np.zeros(self.grid_size, dtype=np.float32)
-                    for goal in self.goals:
-                        layer[*goal] = 1.0
-                elif layer_type == ImageLayer.ACCESSIBLE:
-                    layer = np.ones(self.grid_size, dtype=np.float32)
-                    for ag in self.agents:
-                        layer[*ag.pos] = 0.0
-                else:
-                    raise ValueError(f"Unknown image layer type: {layer_type}")
-                layers.append(layer)
+            layers = make_global_image(self, image_layers, None)
             self.global_image = np.stack(layers)
             if pad_to_shape is not None:
                 padding_dims = [
