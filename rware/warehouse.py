@@ -14,6 +14,7 @@ import numpy as np
 from rware.utils.typing import Direction, ImageLayer
 from rware.layout import Layout
 from rware.entity import Action, Agent, Shelf, _LAYER_SHELVES, _LAYER_AGENTS
+from rware.observation import ObservationType
 
 
 class _VectorWriter:
@@ -34,13 +35,6 @@ class RewardType(Enum):
     GLOBAL = 0
     INDIVIDUAL = 1
     TWO_STAGE = 2
-
-
-class ObservationType(Enum):
-    DICT = 0
-    FLATTENED = 1
-    IMAGE = 2
-    IMAGE_DICT = 3
 
 
 class Warehouse(gym.Env):
@@ -171,6 +165,7 @@ class Warehouse(gym.Env):
 
         self.normalised_coordinates = normalised_coordinates
 
+        # Compute action spaces
         sa_action_space = [len(Action), *msg_bits * (2,)]
         if len(sa_action_space) == 1:
             sa_action_space = gym.spaces.Discrete(sa_action_space[0])
@@ -183,204 +178,16 @@ class Warehouse(gym.Env):
 
         self.agents: list[Agent] = []
 
-        # default values:
-        self.fast_obs = None
-        self.image_obs = None
-        self.image_dict_obs = None
-        if observation_type == ObservationType.IMAGE:
-            self.observation_space = self._use_image_obs(
-                image_observation_layers, image_observation_directional
-            )
-        elif observation_type == ObservationType.IMAGE_DICT:
-            self.observation_space = self._use_image_dict_obs(
-                image_observation_layers, image_observation_directional
-            )
-
-        else:
-            # used for DICT observation type and needed as preceeding stype to generate
-            # FLATTENED observations as well
-            self.observation_space = self._use_slow_obs()
-
-            # for performance reasons we
-            # can flatten the obs vector
-            if observation_type == ObservationType.FLATTENED:
-                self.observation_space = self._use_fast_obs()
+        # Compute Observation spaces
+        self.image_observation_layers = image_observation_layers
+        self.image_observation_directional = image_observation_directional
+        self.obs_type = observation_type
+        self.obs_generator = ObservationType.get(observation_type).from_warehouse(self)
+        self.observation_space = self.obs_generator.space
 
         self.global_image = None
         self.renderer = None
         self.render_mode = render_mode
-
-    def _use_image_obs(self, image_observation_layers, directional=True):
-        """
-        Set image observation space
-        :param image_observation_layers (list[ImageLayer]): list of layers to use as image channels
-        :param directional (bool): flag whether observations should be directional (pointing in
-            direction of agent or north-wise)
-        """
-        self.image_obs = True
-        self.fast_obs = False
-        self.image_dict_obs = True
-        self.image_observation_directional = directional
-        self.image_observation_layers = image_observation_layers
-
-        observation_shape = (1 + 2 * self.sensor_range, 1 + 2 * self.sensor_range)
-
-        layers_min = []
-        layers_max = []
-        for layer in image_observation_layers:
-            if layer == ImageLayer.AGENT_DIRECTION:
-                # directions as int
-                layer_min = np.zeros(observation_shape, dtype=np.float32)
-                layer_max = np.ones(observation_shape, dtype=np.float32) * max(
-                    [d.value + 1 for d in Direction]
-                )
-            else:
-                # binary layer
-                layer_min = np.zeros(observation_shape, dtype=np.float32)
-                layer_max = np.ones(observation_shape, dtype=np.float32)
-            layers_min.append(layer_min)
-            layers_max.append(layer_max)
-
-        # total observation
-        min_obs = np.stack(layers_min)
-        max_obs = np.stack(layers_max)
-        return gym.spaces.Tuple(
-            tuple([gym.spaces.Box(min_obs, max_obs, dtype=np.float32)] * self.n_agents)
-        )
-
-    def _use_image_dict_obs(self, image_observation_layers, directional=True):
-        """
-        Get image dictionary observation with image and flattened feature vector
-        :param image_observation_layers (list[ImageLayer]): list of layers to use as image channels
-        :param directional (bool): flag whether observations should be directional (pointing in
-            direction of agent or north-wise)
-        """
-        image_obs_space = self._use_image_obs(image_observation_layers, directional)[0]
-        self.image_obs = False
-        self.image_dict_obs = True
-        feature_space = gym.spaces.Dict(
-            OrderedDict(
-                {
-                    "direction": gym.spaces.Discrete(4),
-                    "on_highway": gym.spaces.MultiBinary(1),
-                    "carrying_shelf": gym.spaces.MultiBinary(1),
-                }
-            )
-        )
-
-        feature_flat_dim = gym.spaces.flatdim(feature_space)
-        feature_space = gym.spaces.Box(
-            low=-float("inf"),
-            high=float("inf"),
-            shape=(feature_flat_dim,),
-            dtype=np.float32,
-        )
-
-        return gym.spaces.Tuple(
-            tuple(
-                [
-                    gym.spaces.Dict(
-                        {"image": image_obs_space, "features": feature_space}
-                    )
-                    for _ in range(self.n_agents)
-                ]
-            )
-        )
-
-    def _use_slow_obs(self):
-        self.fast_obs = False
-
-        self._obs_bits_for_self = 4 + len(Direction)
-        self._obs_bits_per_agent = 1 + len(Direction) + self.msg_bits
-        self._obs_bits_per_shelf = 2
-        self._obs_bits_for_requests = 2
-
-        self._obs_sensor_locations = (1 + 2 * self.sensor_range) ** 2
-
-        self._obs_length = (
-            self._obs_bits_for_self
-            + self._obs_sensor_locations * self._obs_bits_per_agent
-            + self._obs_sensor_locations * self._obs_bits_per_shelf
-        )
-
-        max_grid_val = max(self.grid_size)
-        low = np.zeros(2)
-        if self.normalised_coordinates:
-            high = np.ones(2)
-            dtype = np.float32
-        else:
-            high = np.ones(2) * max_grid_val
-            dtype = np.int32
-        location_space = gym.spaces.Box(
-            low=low,
-            high=high,
-            shape=(2,),
-            dtype=dtype,
-        )
-
-        self_observation_dict_space = gym.spaces.Dict(
-            OrderedDict(
-                {
-                    "location": location_space,
-                    "carrying_shelf": gym.spaces.MultiBinary(1),
-                    "direction": gym.spaces.Discrete(4),
-                    "on_highway": gym.spaces.MultiBinary(1),
-                }
-            )
-        )
-        sensor_per_location_dict = OrderedDict(
-            {
-                "has_agent": gym.spaces.MultiBinary(1),
-                "direction": gym.spaces.Discrete(4),
-            }
-        )
-        if self.msg_bits > 0:
-            sensor_per_location_dict["local_message"] = gym.spaces.MultiBinary(
-                self.msg_bits
-            )
-        sensor_per_location_dict.update(
-            {
-                "has_shelf": gym.spaces.MultiBinary(1),
-                "shelf_requested": gym.spaces.MultiBinary(1),
-            }
-        )
-        return gym.spaces.Tuple(
-            tuple(
-                [
-                    gym.spaces.Dict(
-                        OrderedDict(
-                            {
-                                "self": self_observation_dict_space,
-                                "sensors": gym.spaces.Tuple(
-                                    self._obs_sensor_locations
-                                    * (gym.spaces.Dict(sensor_per_location_dict),)
-                                ),
-                            }
-                        )
-                    )
-                    for _ in range(self.n_agents)
-                ]
-            )
-        )
-
-    def _use_fast_obs(self):
-        if self.fast_obs:
-            return self.observation_space
-
-        self.fast_obs = True
-        ma_spaces = []
-        for sa_obs in self.observation_space:
-            flatdim = gym.spaces.flatdim(sa_obs)
-            ma_spaces += [
-                gym.spaces.Box(
-                    low=-float("inf"),
-                    high=float("inf"),
-                    shape=(flatdim,),
-                    dtype=np.float32,
-                )
-            ]
-
-        return gym.spaces.Tuple(tuple(ma_spaces))
 
     def _make_img_obs(self, agent: Agent):
         # write image observations
@@ -483,7 +290,7 @@ class Warehouse(gym.Env):
         agents = padded_agents[min_x:max_x, min_y:max_y].reshape(-1)
         shelves = padded_shelfs[min_x:max_x, min_y:max_y].reshape(-1)
 
-        if self.fast_obs:
+        if self.obs_type == ObservationType.FLATTENED:
             # write flattened observations
             flatdim = gym.spaces.flatdim(self.observation_space[agent.id - 1])
             obs = _VectorWriter(flatdim)
@@ -542,7 +349,9 @@ class Warehouse(gym.Env):
             "on_highway": [int(self.layout.is_highway(agent.pos))],
         }
         # --- sensor data
-        obs["sensors"] = tuple({} for _ in range(self._obs_sensor_locations))
+        obs["sensors"] = tuple(
+            {} for _ in range(self.obs_generator._obs_sensor_locations)
+        )
 
         # find neighboring agents
         for i, id_ in enumerate(agents):
@@ -573,9 +382,9 @@ class Warehouse(gym.Env):
         return obs
 
     def _make_obs(self, agent: Agent):
-        if self.image_obs:
+        if self.obs_type == ObservationType.IMAGE:
             return self._make_img_obs(agent)
-        elif self.image_dict_obs:
+        elif self.obs_type == ObservationType.IMAGE_DICT:
             image_obs = self._make_img_obs(agent)
             feature_obs = _VectorWriter(
                 self.observation_space[agent.id - 1]["features"].shape[0]

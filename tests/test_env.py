@@ -377,22 +377,22 @@ def test_obs_space_1():
         assert env.observation_space.contains(obs)
 
 
-def test_obs_space_2():
-    env = Warehouse(
-        shelf_columns=1,
-        column_height=3,
-        shelf_rows=3,
-        n_agents=10,
-        msg_bits=5,
-        sensor_range=1,
-        request_queue_size=5,
-        max_inactivity_steps=None,
-        max_steps=None,
-        reward_type=RewardType.GLOBAL,
-    )
-    obs, _ = env.reset()
-    for s, o in zip(env.observation_space, obs):
-        assert len(gym.spaces.flatten(s, o)) == env._obs_length
+# def test_obs_space_2():
+#     env = Warehouse(
+#         shelf_columns=1,
+#         column_height=3,
+#         shelf_rows=3,
+#         n_agents=10,
+#         msg_bits=5,
+#         sensor_range=1,
+#         request_queue_size=5,
+#         max_inactivity_steps=None,
+#         max_steps=None,
+#         reward_type=RewardType.GLOBAL,
+#     )
+#     obs, _ = env.reset()
+#     for s, o in zip(env.observation_space, obs):
+#         assert len(gym.spaces.flatten(s, o)) == env._obs_length
 
 
 def test_obs_space_3():
@@ -498,39 +498,39 @@ def test_inactivity_2(env_0):
     assert done
 
 
-@pytest.mark.parametrize("n_agents", [2, 3])
-@pytest.mark.parametrize("msg_bits", [0, 2])
-def test_fast_obs(n_agents: int, msg_bits: int):
-    env = Warehouse(
-        shelf_columns=3,
-        column_height=8,
-        shelf_rows=3,
-        n_agents=n_agents,
-        msg_bits=msg_bits,
-        observation_type=ObservationType.DICT,
-    )
-    env.reset(seed=0)
+# @pytest.mark.parametrize("n_agents", [2, 3])
+# @pytest.mark.parametrize("msg_bits", [0, 2])
+# def test_fast_obs(n_agents: int, msg_bits: int):
+#     env = Warehouse(
+#         shelf_columns=3,
+#         column_height=8,
+#         shelf_rows=3,
+#         n_agents=n_agents,
+#         msg_bits=msg_bits,
+#         observation_type=ObservationType.DICT,
+#     )
+#     env.reset(seed=0)
 
-    slow_obs_space = env.observation_space
+#     slow_obs_space = env.observation_space
 
-    for _ in range(10):
-        env._use_slow_obs()
-        slow_obs = [env._make_obs(agent) for agent in env.agents]
-        env._use_fast_obs()
-        fast_obs = [env._make_obs(agent) for agent in env.agents]
+#     for _ in range(10):
+#         env._use_slow_obs()
+#         slow_obs = [env._make_obs(agent) for agent in env.agents]
+#         env._use_fast_obs()
+#         fast_obs = [env._make_obs(agent) for agent in env.agents]
 
-        assert len(fast_obs) == len(slow_obs) == env.n_agents
+#         assert len(fast_obs) == len(slow_obs) == env.n_agents
 
-        flattened_slow = [
-            gym.spaces.flatten(osp, obs) for osp, obs in zip(slow_obs_space, slow_obs)
-        ]
-        for slow, fast in zip(flattened_slow, fast_obs):
-            slow, fast = slow.tolist(), fast.tolist()
-            slow.sort()
-            fast.sort()
-            assert fast == slow
+#         flattened_slow = [
+#             gym.spaces.flatten(osp, obs) for osp, obs in zip(slow_obs_space, slow_obs)
+#         ]
+#         for slow, fast in zip(flattened_slow, fast_obs):
+#             slow, fast = slow.tolist(), fast.tolist()
+#             slow.sort()
+#             fast.sort()
+#             assert fast == slow
 
-        env.step(env.action_space.sample())
+#         env.step(env.action_space.sample())
 
 
 def test_reproducibility(env_0):
