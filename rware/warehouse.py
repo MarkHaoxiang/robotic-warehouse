@@ -10,7 +10,7 @@ import networkx as nx
 import numpy as np
 
 
-from rware.utils.typing import ImageLayer
+from rware.utils.typing import ImageLayer, Direction, Point  # Re-export unused
 from rware.layout import Layout
 from rware.entity import Action, Agent, Shelf, _LAYER_SHELVES, _LAYER_AGENTS
 from rware.observation import ObservationType, make_global_image

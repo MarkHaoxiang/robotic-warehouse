@@ -96,3 +96,6 @@ class PettingZooWrapper(ParallelEnv):
         space = self._env.action_space
         assert isinstance(space, gym.spaces.Tuple)
         return space[int(agent) - 1]
+
+    def __getattr__(self, name: str):
+        return getattr(self._env, name)

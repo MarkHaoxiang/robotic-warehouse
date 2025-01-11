@@ -8,9 +8,9 @@ from expecttest import assert_expected_inline
 
 from rware.layout import Layout
 from rware.observation import ObservationType
+from rware.utils.typing import Direction, ImageLayer
 from rware.warehouse import (
     Warehouse,
-    Direction,
     Action,
     RewardType,
     ImageLayer,
