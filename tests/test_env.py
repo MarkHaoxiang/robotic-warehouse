@@ -283,6 +283,7 @@ def test_action_space_3():
         ObservationType.FLATTENED,
         ObservationType.IMAGE,
         ObservationType.IMAGE_DICT,
+        ObservationType.IMAGE_LAYOUT,
     ],
 )
 def test_obs_space_contains(observation_type: ObservationType):

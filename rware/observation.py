@@ -7,9 +7,11 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import gymnasium as gym
+import gymnasium.spaces as s
 from gymnasium.spaces import Space
 
 from rware.entity import Agent, _LAYER_AGENTS, _LAYER_SHELVES
+from rware.layout import Layout
 from rware.utils.typing import Direction, ImageLayer
 
 if TYPE_CHECKING:
@@ -19,10 +21,12 @@ if TYPE_CHECKING:
 
 
 class ObservationType(Enum):
+    # TODO markli: This should be a config generator object that acts as a factor for _Observation
     DICT = 0
     FLATTENED = 1
     IMAGE = 2
     IMAGE_DICT = 3
+    IMAGE_LAYOUT = 4
 
     @staticmethod
     def get(observation_type: ObservationType) -> type[_Observation]:
@@ -31,6 +35,7 @@ class ObservationType(Enum):
             FlattenedObservation,
             ImageObservation,
             ImageDictObservation,
+            ImageLayoutObservation,
         ]
         return types[observation_type.value]
 
@@ -101,56 +106,50 @@ class DictObservation(_Observation):
         else:
             high = np.ones(2) * max_grid_val
             dtype = np.int32
-        location_space = gym.spaces.Box(
+        location_space = s.Box(
             low=low,
             high=high,
             shape=(2,),
             dtype=dtype,
         )
 
-        self_observation_dict_space = gym.spaces.Dict(
+        self_observation_dict_space = s.Dict(
             OrderedDict(
                 {
                     "location": location_space,
-                    "carrying_shelf": gym.spaces.MultiBinary(1),
-                    "direction": gym.spaces.Discrete(4),
-                    "on_highway": gym.spaces.MultiBinary(1),
+                    "carrying_shelf": s.MultiBinary(1),
+                    "direction": s.Discrete(4),
+                    "on_highway": s.MultiBinary(1),
                 }
             )
         )
         sensor_per_location_dict = OrderedDict(
             {
-                "has_agent": gym.spaces.MultiBinary(1),
-                "direction": gym.spaces.Discrete(4),
+                "has_agent": s.MultiBinary(1),
+                "direction": s.Discrete(4),
             }
         )
         if self.msg_bits > 0:
-            sensor_per_location_dict["local_message"] = gym.spaces.MultiBinary(
-                self.msg_bits
-            )
+            sensor_per_location_dict["local_message"] = s.MultiBinary(self.msg_bits)
         sensor_per_location_dict.update(
             {
-                "has_shelf": gym.spaces.MultiBinary(1),
-                "shelf_requested": gym.spaces.MultiBinary(1),
+                "has_shelf": s.MultiBinary(1),
+                "shelf_requested": s.MultiBinary(1),
             }
         )
-        return gym.spaces.Tuple(
-            tuple(
-                [
-                    gym.spaces.Dict(
-                        OrderedDict(
-                            {
-                                "self": self_observation_dict_space,
-                                "sensors": gym.spaces.Tuple(
-                                    self._obs_sensor_locations
-                                    * (gym.spaces.Dict(sensor_per_location_dict),)
-                                ),
-                            }
-                        )
-                    )
-                    for _ in range(self.n_agents)
-                ]
-            )
+        return _make_multiagent_space(
+            s.Dict(
+                OrderedDict(
+                    {
+                        "self": self_observation_dict_space,
+                        "sensors": s.Tuple(
+                            self._obs_sensor_locations
+                            * (s.Dict(sensor_per_location_dict),)
+                        ),
+                    }
+                )
+            ),
+            self.n_agents,
         )
 
     def make_obs(self, agent: Agent, warehouse: Warehouse):
@@ -211,9 +210,9 @@ class FlattenedObservation(_Observation):
 
         ma_spaces = []
         for sa_obs in observation_space:
-            flatdim = gym.spaces.flatdim(sa_obs)
+            flatdim = s.flatdim(sa_obs)
             ma_spaces += [
-                gym.spaces.Box(
+                s.Box(
                     low=-float("inf"),
                     high=float("inf"),
                     shape=(flatdim,),
@@ -221,13 +220,13 @@ class FlattenedObservation(_Observation):
                 )
             ]
 
-        return gym.spaces.Tuple(tuple(ma_spaces))
+        return s.Tuple(tuple(ma_spaces))
 
     def make_obs(self, agent: Agent, warehouse: Warehouse):
         agents, shelves = make_local_obs(agent, warehouse, self.sensor_range)
 
         # write flattened observations
-        flatdim = gym.spaces.flatdim(self.space[agent.id - 1])
+        flatdim = s.flatdim(self.space[agent.id - 1])
         obs = _VectorWriter(flatdim)
 
         pos = (
@@ -277,7 +276,7 @@ class ImageObservation(_Observation):
     def __init__(self, warehouse: Warehouse):
         super().__init__(warehouse)
 
-    def _reset_space(self, warehouse):
+    def _reset_space(self, warehouse: Warehouse):
         self.image_observation_layers = warehouse.image_observation_layers
         self.directional = warehouse.image_observation_directional
         observation_shape = (1 + 2 * self.sensor_range, 1 + 2 * self.sensor_range)
@@ -301,8 +300,8 @@ class ImageObservation(_Observation):
         # total observation
         min_obs = np.stack(layers_min)
         max_obs = np.stack(layers_max)
-        return gym.spaces.Tuple(
-            tuple([gym.spaces.Box(min_obs, max_obs, dtype=np.float32)] * self.n_agents)
+        return _make_multiagent_space(
+            s.Box(min_obs, max_obs, dtype=np.float32), self.n_agents
         )
 
     def make_obs(self, agent: Agent, warehouse: Warehouse):
@@ -337,41 +336,138 @@ class ImageObservation(_Observation):
         return obs
 
 
-class ImageDictObservation(_Observation):
-    def __init__(self, warehouse: Warehouse):
-        super().__init__(warehouse)
+class ImageLayoutObservation(_Observation):
+    """When the global layout is known to all agents.
 
-    def _reset_space(self, warehouse):
+    The global layout consists of the locations of shelves and goals.
+
+    This observation is most similar to the ImageDictObservation setting, but we extend the Image obs to the entire layout.
+    masking out areas outside of sensor range.
+    """
+
+    def _make_layout_obs(self, layout: Layout) -> np.ndarray:
+        shelves = 1 - layout.highways.copy()
+        goals = np.zeros_like(shelves)
+        for goal in layout.goals:
+            goals[*goal] = 1
+        return np.stack((shelves, goals), axis=0)
+
+    def _reset_space(self, warehouse: Warehouse):
+        self.image_observation_layers = warehouse.image_observation_layers
+
+        # Feature layers
+        feature_space = s.Dict(
+            OrderedDict(
+                {"direction": s.Discrete(4), "carrying_shelf": s.MultiBinary(1)}
+            )
+        )
+        feature_flat_dim = s.flatdim(feature_space)
+        feature_space = (
+            s.Box(  # TODO: We should adapt this function to have correct low and high.
+                low=-float("inf"),
+                high=float("inf"),
+                shape=(feature_flat_dim,),
+                dtype=np.float32,
+            )
+        )
+
+        size = warehouse.grid_size
+        layers_min = [
+            np.zeros(size, dtype=np.float32),
+            np.zeros(size, dtype=np.float32),
+        ]
+        layers_max = [np.ones(size, dtype=np.float32), np.ones(size, dtype=np.float32)]
+        for layer in self.image_observation_layers:
+            if layer == ImageLayer.AGENT_DIRECTION:
+                # directions as int
+                layer_min = np.zeros(size, dtype=np.float32)
+                layer_max = np.ones(size, dtype=np.float32) * max(
+                    [d.value + 1 for d in Direction]
+                )
+            else:
+                # binary layer
+                layer_min = np.zeros(size, dtype=np.float32)
+                layer_max = np.ones(size, dtype=np.float32)
+            layers_min.append(layer_min)
+            layers_max.append(layer_max)
+
+        min_obs = np.stack(layers_min)
+        max_obs = np.stack(layers_max)
+
+        agent_space = s.Dict(
+            {
+                "image": s.Box(min_obs, max_obs, dtype=np.float32),
+                "features": feature_space,
+            }
+        )
+        return _make_multiagent_space(agent_space, self.n_agents)
+
+    def make_obs(self, agent: Agent, warehouse: Warehouse):
+        # Make image obs
+        if agent.id == 1:  # TODO: This is going to lead to a bug eventually
+            # first agent's observation --> update global observation layers
+            self.layout_image = self._make_layout_obs(warehouse.layout)
+            layers = make_global_image(
+                warehouse,
+                image_layers=self.image_observation_layers,
+            )
+            self.global_layers = np.stack(layers)
+
+        # global information was generated --> get information for agent
+        start_x = agent.pos.x - self.sensor_range
+        end_x = agent.pos.x + self.sensor_range + 1
+        start_y = agent.pos.y - self.sensor_range
+        end_y = agent.pos.y + self.sensor_range + 1
+
+        image = self.global_layers.copy()
+        mask = np.zeros_like(image)
+        mask[:, start_x:end_x, start_y:end_y] = 1.0
+        image = image * mask
+        image = np.concat((self.layout_image, image), axis=0)
+
+        # Make feature obs
+        feature_obs = _VectorWriter(self.space[agent.id - 1]["features"].shape[0])
+        direction = np.zeros(4)
+        direction[agent.dir.value] = 1.0
+        feature_obs.write(direction)
+        feature_obs.write(
+            [
+                int(agent.carrying_shelf is not None),
+            ]
+        )
+
+        return {
+            "image": image,
+            "features": feature_obs.vector,
+        }
+
+
+class ImageDictObservation(_Observation):
+    def _reset_space(self, warehouse: Warehouse):
         self.image_generator = ImageObservation(warehouse)
         observation_space = self.image_generator.space[0]
 
-        feature_space = gym.spaces.Dict(
+        feature_space = s.Dict(
             OrderedDict(
                 {
-                    "direction": gym.spaces.Discrete(4),
-                    "on_highway": gym.spaces.MultiBinary(1),
-                    "carrying_shelf": gym.spaces.MultiBinary(1),
+                    "direction": s.Discrete(4),
+                    "on_highway": s.MultiBinary(1),
+                    "carrying_shelf": s.MultiBinary(1),
                 }
             )
         )
 
-        feature_flat_dim = gym.spaces.flatdim(feature_space)
-        feature_space = gym.spaces.Box(
+        feature_flat_dim = s.flatdim(feature_space)
+        feature_space = s.Box(
             low=-float("inf"),
             high=float("inf"),
             shape=(feature_flat_dim,),
             dtype=np.float32,
         )
 
-        return gym.spaces.Tuple(
-            tuple(
-                [
-                    gym.spaces.Dict(
-                        {"image": observation_space, "features": feature_space}
-                    )
-                    for _ in range(self.n_agents)
-                ]
-            )
+        return _make_multiagent_space(
+            s.Dict({"image": observation_space, "features": feature_space}),
+            self.n_agents,
         )
 
     def make_obs(self, agent, warehouse):
@@ -472,3 +568,7 @@ def make_global_image(
             layer = np.pad(layer, padding_size, mode="constant")
         layers.append(layer)
     return layers
+
+
+def _make_multiagent_space(agent_space: Space, n_agents: int) -> s.Tuple:
+    return s.Tuple((agent_space for _ in range(n_agents)))
