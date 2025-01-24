@@ -6,7 +6,6 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 import numpy as np
-import gymnasium as gym
 import gymnasium.spaces as s
 from gymnasium.spaces import Space
 
@@ -17,7 +16,7 @@ from rware.utils.typing import Direction, ImageLayer
 if TYPE_CHECKING:
     # TODO markli: Really, we want to decouple this circular dependency by creating a WarehouseState class
     # and using dependency injection
-    from warehouse import Warehouse
+    from .warehouse import Warehouse
 
 
 class ObservationType(Enum):
