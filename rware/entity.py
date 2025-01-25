@@ -23,6 +23,10 @@ class Entity:
         self.pos = pos
 
     @property
+    def key(self) -> int:
+        return self.id - 1
+
+    @property
     def x(self) -> int:
         return self.pos.x
 

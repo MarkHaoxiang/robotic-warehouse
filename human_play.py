@@ -87,7 +87,9 @@ class InteractiveRWAREEnv:
         print()
 
     def _get_current_agent_info(self):
-        agent_carrying = self.env.unwrapped.agents[self.current_agent_index].carrying_shelf
+        agent_carrying = self.env.unwrapped.agents[
+            self.current_agent_index
+        ].carrying_shelf
         agent_x = self.env.unwrapped.agents[self.current_agent_index].x
         agent_y = self.env.unwrapped.agents[self.current_agent_index].y
         agent_str = f"Agent {self.current_agent_index + 1} (at row {agent_y + 1}, col {agent_x + 1}"
@@ -96,7 +98,6 @@ class InteractiveRWAREEnv:
         else:
             agent_str += ")"
         return agent_str
-        
 
     def _display_info(self, obss, rews, done):
         print(f"Step {self.t}:")
@@ -151,7 +152,9 @@ class InteractiveRWAREEnv:
         while self.running:
             if self.reset:
                 if self.display_info:
-                    print(f"Finished episode with episodic returns: {[round(ret, 3) for ret in self.ep_returns]}")
+                    print(
+                        f"Finished episode with episodic returns: {[round(ret, 3) for ret in self.ep_returns]}"
+                    )
                     print()
                 obss, _ = self.env.reset()
                 self.reset = False
@@ -164,7 +167,9 @@ class InteractiveRWAREEnv:
             if self.current_action is not None:
                 actions = [Action.NOOP] * self.n_agents
                 actions[self.current_agent_index] = self.current_action
-                obss, rews, done, trunc, info = self.env.step([act.value for act in actions])
+                obss, rews, done, trunc, info = self.env.step(
+                    [act.value for act in actions]
+                )
                 self.ep_returns += np.array(rews)
                 self.t += 1
 
@@ -179,7 +184,8 @@ class InteractiveRWAREEnv:
         self.env.close()
 
 
-
 if __name__ == "__main__":
     args = parse_args()
-    InteractiveRWAREEnv(env=args.env, max_steps=args.max_steps, display_info=args.display_info)
+    InteractiveRWAREEnv(
+        env=args.env, max_steps=args.max_steps, display_info=args.display_info
+    )

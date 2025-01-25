@@ -87,7 +87,7 @@ def get_display(spec):
 class Viewer(object):
     def __init__(self, world_size):
         display = get_display(None)
-        self.rows, self.cols = world_size
+        self.cols, self.rows = world_size
 
         self.grid_size = 30
         self.icon_size = 20

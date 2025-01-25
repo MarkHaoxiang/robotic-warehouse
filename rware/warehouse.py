@@ -20,6 +20,48 @@ class RewardType(Enum):
     GLOBAL = 0
     INDIVIDUAL = 1
     TWO_STAGE = 2
+    SHAPED = 3
+
+
+class ShapedReward:
+    """Designed to make the environment easier to learn, while (probably) not impacting the optimal policy"""
+
+    NOOP_PENALTY = 0.01  # A noop is usually sub-optimal
+    GOAL_POTENTIAL_REWARD = 0.05
+
+    def __init__(self, layout: Layout):
+        # TODO: Add a reward when not carrying a shelf?
+        # We also add a potential based reward to encourage carrying shelves closer to (any) goal.
+        self.distance_from_goal = np.ones_like(layout.highways) * np.inf
+
+        G = nx.Graph()
+
+        for x in range(layout.grid_size[0]):
+            for y in range(layout.grid_size[1]):
+                p = Point(x, y)
+                G.add_node(p)
+                if layout.is_highway(p):
+                    # Add edges in the four cardinal directions
+                    G.add_edges_from(
+                        [
+                            (p, Point(x - 1, y)),
+                            (p, Point(x + 1, y)),
+                            (p, Point(x, y - 1)),
+                            (p, Point(x, y + 1)),
+                        ]
+                    )
+
+        for goal in layout.goals:
+            paths = nx.single_source_shortest_path(G=G, source=goal)
+            for target, path in paths.items():
+                self.distance_from_goal[*target] = min(
+                    self.distance_from_goal[*target], len(path)
+                )
+
+        maximum_distance = np.max(
+            self.distance_from_goal[np.isfinite(self.distance_from_goal)]
+        )
+        self.distance_from_goal = np.maximum(self.distance_from_goal, maximum_distance)
 
 
 class Warehouse(gym.Env):
@@ -116,6 +158,8 @@ class Warehouse(gym.Env):
             with respect to total warehouse size
         :type normalised_coordinates: bool
         """
+        self.reward_range = (0, 1)
+        self.reward_type = reward_type
 
         # Generate initial layout
         if layout is None:
@@ -141,8 +185,6 @@ class Warehouse(gym.Env):
         self.msg_bits = msg_bits
         self.sensor_range = sensor_range
         self.max_inactivity_steps = max_inactivity_steps
-        self.reward_type = reward_type
-        self.reward_range = (0, 1)
 
         self._cur_inactive_steps = None
         self._cur_steps = 0
@@ -195,6 +237,9 @@ class Warehouse(gym.Env):
         self.grid = self.layout.generate_grid()
         self.goals = self.layout.goals
 
+        if self.reward_type == RewardType.SHAPED:
+            self.shaped_reward = ShapedReward(layout)
+
     def reset(self, seed: int | None = None, options: dict[str, Any] | None = None):
         if seed is not None:
             super().reset(seed=seed, options=options)
@@ -227,6 +272,10 @@ class Warehouse(gym.Env):
         self, actions: list[Action]
     ) -> tuple[list[np.ndarray], list[float], bool, bool, dict]:
         assert len(actions) == len(self.agents)
+
+        # Mapping from agent id to rewards
+        rewards = np.zeros(self.n_agents)
+        is_shaped_reward = self.reward_type == RewardType.SHAPED
 
         for agent, action in zip(self.agents, actions):
             if self.msg_bits > 0:
@@ -292,28 +341,37 @@ class Warehouse(gym.Env):
             assert agent.req_action == Action.FORWARD
             agent.req_action = Action.NOOP
 
-        rewards = np.zeros(self.n_agents)
-
         for agent in self.agents:
             agent.prev_pos = agent.pos
 
             if agent.req_action == Action.FORWARD:
+                # Move forward
                 agent.pos = agent.req_location(self.grid_size)
                 if agent.carrying_shelf:
+                    # Move a shelf
                     agent.carrying_shelf.pos = agent.pos
+
             elif agent.req_action in [Action.LEFT, Action.RIGHT]:
+                # Rotate direction
                 agent.dir = agent.req_direction()
             elif agent.req_action == Action.TOGGLE_LOAD and not agent.carrying_shelf:
+                # Pick up a shelf
                 shelf_id = self.grid[_LAYER_SHELVES, *agent.pos]
                 if shelf_id:
                     agent.carrying_shelf = self.shelves[shelf_id - 1]
             elif agent.req_action == Action.TOGGLE_LOAD and agent.carrying_shelf:
+                # Try to put down a shelf
                 if not self.layout.is_highway(agent.pos):
                     agent.carrying_shelf = None
                     if agent.has_delivered and self.reward_type == RewardType.TWO_STAGE:
-                        rewards[agent.id - 1] += 0.5
+                        rewards[agent.key] += 0.5
 
                     agent.has_delivered = False
+                elif is_shaped_reward:
+                    # Trying to put down a shelf when on a highway
+                    rewards[agent.key] -= ShapedReward.NOOP_PENALTY
+            elif agent.req_action == Action.NOOP and is_shaped_reward:
+                rewards[agent.key] -= ShapedReward.NOOP_PENALTY
 
         self._recalc_grid()
 
@@ -333,15 +391,18 @@ class Warehouse(gym.Env):
             new_request = self.np_random.choice(candidates)
             self.request_queue[self.request_queue.index(shelf)] = new_request
             # also reward the agents
-            if self.reward_type == RewardType.GLOBAL:
-                rewards += 1
-            elif self.reward_type == RewardType.INDIVIDUAL:
-                agent_id = self.grid[_LAYER_AGENTS, *goal]
-                rewards[agent_id - 1] += 1
-            elif self.reward_type == RewardType.TWO_STAGE:
-                agent_id = self.grid[_LAYER_AGENTS, *goal]
-                self.agents[agent_id - 1].has_delivered = True
-                rewards[agent_id - 1] += 0.5
+            match self.reward_type:
+                case RewardType.GLOBAL:
+                    rewards += 1
+                case RewardType.INDIVIDUAL:
+                    agent_id = self.grid[_LAYER_AGENTS, *goal]
+                    rewards[agent_id - 1] += 1
+                case RewardType.TWO_STAGE:
+                    agent_id = self.grid[_LAYER_AGENTS, *goal]
+                    self.agents[agent_id - 1].has_delivered = True
+                    rewards[agent_id - 1] += 0.5
+                case _:
+                    pass
 
         if shelf_delivered:
             self._cur_inactive_steps = 0
