@@ -50,7 +50,7 @@ class Agent(Entity):
         self.dir = dir_
         self.message = np.zeros(msg_bits)
         self.req_action: Action | None = None
-        self.carrying_shelf: Shelf | None = None
+        self.carried_shelf: Shelf | None = None
         self.canceled_action = None
         self.has_delivered = False
         self.loaded = False
@@ -91,6 +91,7 @@ class Agent(Entity):
 class Shelf(Entity):
     def __init__(self, id_: int, pos: Point):
         super().__init__(id_, pos)
+        self.is_requested = False
 
     @property
     def collision_layers(self):

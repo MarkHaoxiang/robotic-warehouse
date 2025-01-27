@@ -192,7 +192,7 @@ def test_head_collision_1(env_two_agents):
     )
     env.agents[0].y = env.shelves[0].y = 25
     env.agents[0].dir = Direction.RIGHT
-    env.agents[0].carrying_shelf = env.shelves[0]
+    env.agents[0].carried_shelf = env.shelves[0]
 
     env.agents[1].x = 5  # should place it next to the other
     env.agents[1].y = 25
@@ -214,12 +214,12 @@ def test_head_collision_2(env_two_agents):
     )
     env.agents[0].y = env.shelves[0].y = 25
     env.agents[0].dir = Direction.RIGHT
-    env.agents[0].carrying_shelf = env.shelves[0]
+    env.agents[0].carried_shelf = env.shelves[0]
 
     env.agents[1].x = env.shelves[1].x = 5  # should place it next to the other
     env.agents[1].y = env.shelves[1].y = 25
     env.agents[1].dir = Direction.LEFT
-    env.agents[1].carrying_shelf = env.shelves[1]
+    env.agents[1].carried_shelf = env.shelves[1]
     env._recalc_grid()
     env.step([Action.FORWARD, Action.FORWARD])
 
@@ -237,7 +237,7 @@ def test_head_collision_3(env_two_agents):
     )
     env.agents[0].y = env.shelves[0].y = 25
     env.agents[0].dir = Direction.LEFT
-    env.agents[0].carrying_shelf = env.shelves[0]
+    env.agents[0].carried_shelf = env.shelves[0]
 
     env.agents[1].x = 2  # should place it next to the other
     env.agents[1].y = 25
@@ -513,7 +513,7 @@ def test_simple_carrying(env_single_agent):
     env.agents[0].y = env.shelves[0].y = 25
     env.agents[0].dir = Direction.DOWN
 
-    env.agents[0].carrying_shelf = env.shelves[0]
+    env.agents[0].carried_shelf = env.shelves[0]
 
     env._recalc_grid()
     env.step([Action.FORWARD])
@@ -531,7 +531,7 @@ def test_simple_carrying_collision(env_single_agent):
     env.agents[0].y = env.shelves[0].y = 25
     env.agents[0].dir = Direction.LEFT
 
-    env.agents[0].carrying_shelf = env.shelves[0]
+    env.agents[0].carried_shelf = env.shelves[0]
 
     env._recalc_grid()
     env.step([Action.FORWARD])
@@ -553,8 +553,8 @@ def test_simple_carrying_chain(env_two_agents):
     env.agents[1].y = env.shelves[1].y = 25
     env.agents[1].dir = Direction.RIGHT
 
-    env.agents[0].carrying_shelf = env.shelves[0]
-    env.agents[1].carrying_shelf = env.shelves[1]
+    env.agents[0].carried_shelf = env.shelves[0]
+    env.agents[1].carried_shelf = env.shelves[1]
 
     env._recalc_grid()
     env.step(2 * [Action.FORWARD])
@@ -580,8 +580,8 @@ def test_pickup_and_carry_0(env_single_agent):
     env.step([Action.FORWARD])
 
     env.step([Action.TOGGLE_LOAD])
-    assert env.agents[0].carrying_shelf is not None
-    shelf = env.agents[0].carrying_shelf
+    assert env.agents[0].carried_shelf is not None
+    shelf = env.agents[0].carried_shelf
     assert shelf.x == 2
     assert shelf.y == 25
     env.step([Action.LEFT])
@@ -614,8 +614,8 @@ def test_pickup_and_carry_1(env_single_agent):
     env._recalc_grid()
     env.step([Action.FORWARD])
     env.step([Action.TOGGLE_LOAD])
-    assert env.agents[0].carrying_shelf is not None
-    shelf = env.agents[0].carrying_shelf
+    assert env.agents[0].carried_shelf is not None
+    shelf = env.agents[0].carried_shelf
     assert shelf.x == 2
     assert shelf.y == 25
     env.step([Action.LEFT])

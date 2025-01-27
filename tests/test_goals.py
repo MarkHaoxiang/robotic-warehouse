@@ -23,7 +23,7 @@ def env_0():
     env.shelves[0].x = 4
     env.shelves[0].y = 27
 
-    env.agents[0].carrying_shelf = env.shelves[0]
+    env.agents[0].carried_shelf = env.shelves[0]
 
     env.request_queue[0] = env.shelves[0]
     env._recalc_grid()
@@ -42,7 +42,7 @@ def env_1():
     env.shelves[0].x = 4
     env.shelves[0].y = 27
 
-    env.agents[0].carrying_shelf = env.shelves[0]
+    env.agents[0].carried_shelf = env.shelves[0]
 
     env.agents[1].x = 3
     env.agents[1].y = 3
@@ -64,7 +64,7 @@ def env_2():
     env.shelves[0].x = 4
     env.shelves[0].y = 27
 
-    env.agents[0].carrying_shelf = env.shelves[0]
+    env.agents[0].carried_shelf = env.shelves[0]
 
     env.agents[1].x = 3
     env.agents[1].y = 3
@@ -86,7 +86,7 @@ def env_3():
     env.shelves[0].x = 4
     env.shelves[0].y = 27
 
-    env.agents[0].carrying_shelf = env.shelves[0]
+    env.agents[0].carried_shelf = env.shelves[0]
 
     env.agents[1].x = 3
     env.agents[1].y = 3

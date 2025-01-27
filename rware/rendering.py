@@ -286,7 +286,7 @@ class Viewer(object):
                 verts += [x, y]
             circle = pyglet.graphics.vertex_list(resolution, ("v2f", verts))
 
-            draw_color = _AGENT_LOADED_COLOR if agent.carrying_shelf else _AGENT_COLOR
+            draw_color = _AGENT_LOADED_COLOR if agent.carried_shelf else _AGENT_COLOR
 
             glColor3ub(*draw_color)
             circle.draw(GL_POLYGON)

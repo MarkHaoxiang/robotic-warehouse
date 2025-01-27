@@ -19,7 +19,7 @@ import warnings
 import numpy as np
 import gymnasium as gym
 
-from rware.warehouse import Action
+from rware.warehouse import Action, Warehouse, RewardType
 
 
 def parse_args():
@@ -53,7 +53,14 @@ class InteractiveRWAREEnv:
         max_steps,
         display_info: bool = True,
     ):
-        self.env = gym.make(env, render_mode="human", max_steps=max_steps)
+        # self.env = gym.make(env, render_mode="human", max_steps=max_steps)
+
+        self.env = Warehouse(
+            shelf_columns=3,
+            column_height=8,
+            shelf_rows=2,
+            reward_type=RewardType.SHAPED,
+        )
         self.n_agents = self.env.unwrapped.n_agents
         self.running = True
         self.current_agent_index = 0

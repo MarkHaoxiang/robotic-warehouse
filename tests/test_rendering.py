@@ -11,7 +11,7 @@ def test_rendering():
     env.reset()
     expected_render = env.render()
     assert_expected_inline(
-        str(expected_render.mean().round()), """204.0"""
+        str(expected_render.mean().round()), """200.0"""
     )
     assert_expected_inline(
         str(expected_render),

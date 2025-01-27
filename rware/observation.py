@@ -164,7 +164,7 @@ class DictObservation(_Observation):
         # --- self data
         obs["self"] = {
             "location": np.array(pos, dtype=np.int32),
-            "carrying_shelf": [int(agent.carrying_shelf is not None)],
+            "carrying_shelf": [int(agent.carried_shelf is not None)],
             "direction": agent.dir.value,
             "on_highway": [int(warehouse.layout.is_highway(agent.pos))],
         }
@@ -234,7 +234,7 @@ class FlattenedObservation(_Observation):
             else agent.pos
         )
 
-        obs.write([*pos, int(agent.carrying_shelf is not None)])
+        obs.write([*pos, int(agent.carried_shelf is not None)])
         direction = np.zeros(4)
         direction[agent.dir.value] = 1.0
         obs.write(direction)
@@ -431,7 +431,7 @@ class ImageLayoutObservation(_Observation):
         feature_obs.write(direction)
         feature_obs.write(
             [
-                int(agent.carrying_shelf is not None),
+                int(agent.carried_shelf is not None),
             ]
         )
 
@@ -478,7 +478,7 @@ class ImageDictObservation(_Observation):
         feature_obs.write(
             [
                 int(warehouse.layout.is_highway(agent.pos)),
-                int(agent.carrying_shelf is not None),
+                int(agent.carried_shelf is not None),
             ]
         )
         return {
@@ -550,7 +550,7 @@ def make_global_image(
             case ImageLayer.AGENT_LOAD:
                 layer = np.zeros(warehouse.grid_size, dtype=np.float32)
                 for ag in warehouse.agents:
-                    if ag.carrying_shelf is not None:
+                    if ag.carried_shelf is not None:
                         layer[*ag.pos] = 1.0
             case ImageLayer.GOALS:
                 layer = np.zeros(warehouse.grid_size, dtype=np.float32)

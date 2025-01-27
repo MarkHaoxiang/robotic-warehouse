@@ -41,7 +41,7 @@ def env_0():
     env.shelves[0].x = 4
     env.shelves[0].y = 27
 
-    env.agents[0].carrying_shelf = env.shelves[0]
+    env.agents[0].carried_shelf = env.shelves[0]
 
     env.request_queue[0] = env.shelves[0]
     env._recalc_grid()
@@ -525,7 +525,7 @@ def test_reproducibility(env_0):
                 np.array([shelf.id for shelf in env.unwrapped.request_queue])
             )
             player_pos1.append([p.pos for p in env.unwrapped.agents])
-            player_carrying1.append([p.carrying_shelf for p in env.unwrapped.agents])
+            player_carrying1.append([p.carried_shelf for p in env.unwrapped.agents])
             player_has_delivered1.append(
                 [p.has_delivered for p in env.unwrapped.agents]
             )
@@ -547,7 +547,7 @@ def test_reproducibility(env_0):
                 np.array([shelf.id for shelf in env.unwrapped.request_queue])
             )
             player_pos1.append([p.pos for p in env.unwrapped.agents])
-            player_carrying2.append([p.carrying_shelf for p in env.unwrapped.agents])
+            player_carrying2.append([p.carried_shelf for p in env.unwrapped.agents])
             player_has_delivered2.append(
                 [p.has_delivered for p in env.unwrapped.agents]
             )
