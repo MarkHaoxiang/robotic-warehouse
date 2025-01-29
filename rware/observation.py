@@ -74,8 +74,12 @@ class _Observation(ABC):
     def _reset_space(self, warehouse: Warehouse) -> Space:
         return NotImplementedError()
 
-    @abstractmethod
-    def make_obs(self, agent: Agent, warehouse: Warehouse):
+    def make_obs(self, warehouse: Warehouse):
+        return tuple(
+            [self._make_agent_obs(agent, warehouse) for agent in warehouse.agents]
+        )
+
+    def _make_agent_obs(self, agent: Agent, warehouse: Warehouse):
         return NotImplementedError()
 
 
@@ -84,7 +88,6 @@ class DictObservation(_Observation):
         super().__init__(warehouse)
 
     def _reset_space(self, warehouse):
-
         self._obs_bits_for_self = 4 + len(Direction)
         self._obs_bits_per_agent = 1 + len(Direction) + self.msg_bits
         self._obs_bits_per_shelf = 2
@@ -151,7 +154,7 @@ class DictObservation(_Observation):
             self.n_agents,
         )
 
-    def make_obs(self, agent: Agent, warehouse: Warehouse):
+    def _make_agent_obs(self, agent: Agent, warehouse: Warehouse):
         agents, shelves = make_local_obs(agent, warehouse, self.sensor_range)
 
         # write dictionary observations
@@ -221,7 +224,7 @@ class FlattenedObservation(_Observation):
 
         return s.Tuple(tuple(ma_spaces))
 
-    def make_obs(self, agent: Agent, warehouse: Warehouse):
+    def _make_agent_obs(self, agent: Agent, warehouse: Warehouse):
         agents, shelves = make_local_obs(agent, warehouse, self.sensor_range)
 
         # write flattened observations
@@ -303,7 +306,7 @@ class ImageObservation(_Observation):
             s.Box(min_obs, max_obs, dtype=np.float32), self.n_agents
         )
 
-    def make_obs(self, agent: Agent, warehouse: Warehouse):
+    def _make_agent_obs(self, agent: Agent, warehouse: Warehouse):
         if agent.id == 1:
             # first agent's observation --> update global observation layers
             layers = make_global_image(
@@ -349,7 +352,7 @@ class ImageLayoutObservation(_Observation):
         goals = np.zeros_like(shelves)
         for goal in layout.goals:
             goals[*goal] = 1
-        return np.stack((shelves, goals), axis=0)
+        return np.stack((shelves, goals), axis=0, dtype=np.float32)
 
     def _reset_space(self, warehouse: Warehouse):
         self.image_observation_layers = warehouse.image_observation_layers
@@ -370,12 +373,15 @@ class ImageLayoutObservation(_Observation):
             )
         )
 
-        size = warehouse.grid_size
-        layers_min = [
-            np.zeros(size, dtype=np.float32),
-            np.zeros(size, dtype=np.float32),
-        ]
-        layers_max = [np.ones(size, dtype=np.float32), np.ones(size, dtype=np.float32)]
+        # size = warehouse.grid_size
+        size = (1 + 2 * self.sensor_range, 1 + 2 * self.sensor_range)
+        # layers_min = [
+        #     np.zeros(size, dtype=np.float32),
+        #     np.zeros(size, dtype=np.float32),
+        # ]
+        # layers_max = [np.ones(size, dtype=np.float32), np.ones(size, dtype=np.float32)]
+        layers_min = []
+        layers_max = []
         for layer in self.image_observation_layers:
             if layer == ImageLayer.AGENT_DIRECTION:
                 # directions as int
@@ -389,40 +395,76 @@ class ImageLayoutObservation(_Observation):
                 layer_max = np.ones(size, dtype=np.float32)
             layers_min.append(layer_min)
             layers_max.append(layer_max)
-
         min_obs = np.stack(layers_min)
         max_obs = np.stack(layers_max)
 
+        local_image_space = s.Box(min_obs, max_obs, dtype=np.float32)
+
         agent_space = s.Dict(
             {
-                "image": s.Box(min_obs, max_obs, dtype=np.float32),
+                "local_image": local_image_space,
+                "global_image": s.Box(
+                    low=np.array(
+                        [
+                            np.zeros(warehouse.grid_size, dtype=np.float32),
+                            np.zeros(warehouse.grid_size, dtype=np.float32),
+                            np.zeros(warehouse.grid_size, dtype=np.float32),
+                        ]
+                    ),
+                    high=np.array(
+                        [
+                            np.ones(warehouse.grid_size, dtype=np.float32),
+                            np.ones(warehouse.grid_size, dtype=np.float32),
+                            np.ones(warehouse.grid_size, dtype=np.float32),
+                        ]
+                    ),
+                    dtype=np.float32,
+                ),
                 "features": feature_space,
             }
         )
         return _make_multiagent_space(agent_space, self.n_agents)
 
-    def make_obs(self, agent: Agent, warehouse: Warehouse):
-        # Make image obs
-        if agent.id == 1:  # TODO: This is going to lead to a bug eventually
-            # first agent's observation --> update global observation layers
-            self.layout_image = self._make_layout_obs(warehouse.layout)
-            layers = make_global_image(
-                warehouse,
-                image_layers=self.image_observation_layers,
-            )
-            self.global_layers = np.stack(layers)
+    def make_obs(self, warehouse):
+        self.layout_image = self._make_layout_obs(warehouse.layout)
+        layers = make_global_image(
+            warehouse,
+            image_layers=self.image_observation_layers,
+        )
+        self.global_layers = np.stack(layers)
+        return super().make_obs(warehouse)
 
-        # global information was generated --> get information for agent
-        start_x = agent.pos.x - self.sensor_range
+    def _make_agent_obs(self, agent: Agent, warehouse: Warehouse):
+        # Global information was generated --> get information for agent
+        image = self.global_layers.copy()
+
+        # Global
+        start_x = max(0, agent.pos.x - self.sensor_range)
         end_x = agent.pos.x + self.sensor_range + 1
-        start_y = agent.pos.y - self.sensor_range
+        start_y = max(0, agent.pos.y - self.sensor_range)
         end_y = agent.pos.y + self.sensor_range + 1
 
-        image = self.global_layers.copy()
-        mask = np.zeros_like(image)
+        mask = np.zeros(warehouse.grid_size)[np.newaxis, :, :]
         mask[:, start_x:end_x, start_y:end_y] = 1.0
-        image = image * mask
-        image = np.concat((self.layout_image, image), axis=0)
+        global_image = np.concat((self.layout_image, mask), axis=0, dtype=np.float32)
+
+        # Local
+        sensor_pad = [
+            (0, 0),
+            (warehouse.sensor_range, warehouse.sensor_range),
+            (warehouse.sensor_range, warehouse.sensor_range),
+        ]
+        start_x = agent.pos.x
+        end_x = agent.pos.x + 2 * self.sensor_range + 1
+        start_y = agent.pos.y
+        end_y = agent.pos.y + 2 * self.sensor_range + 1
+        image = np.pad(image, sensor_pad, mode="constant")
+
+        local_image = image[:, start_x:end_x, start_y:end_y]
+
+        # mask = np.zeros_like(image)
+        # image = image * mask
+        # image = np.concat((self.layout_image, image), axis=0)
 
         # Make feature obs
         feature_obs = _VectorWriter(self.space[agent.id - 1]["features"].shape[0])
@@ -435,8 +477,16 @@ class ImageLayoutObservation(_Observation):
             ]
         )
 
+        # if agent.id == 1:
+        #     print(feature_obs.vector, self.image_observation_layers)
+
+        # assert self._reset_space(warehouse)[0]["local_image"].contains(local_image)
+        # print(self._reset_space(warehouse)[0]["global_image"])
+        # assert self._reset_space(warehouse)[0]["global_image"].contains(global_image)
+
         return {
-            "image": image,
+            "local_image": local_image,
+            "global_image": global_image,
             "features": feature_obs.vector,
         }
 
@@ -469,8 +519,8 @@ class ImageDictObservation(_Observation):
             self.n_agents,
         )
 
-    def make_obs(self, agent, warehouse):
-        image_obs = self.image_generator.make_obs(agent, warehouse)
+    def _make_agent_obs(self, agent, warehouse):
+        image_obs = self.image_generator._make_agent_obs(agent, warehouse)
         feature_obs = _VectorWriter(self.space[agent.id - 1]["features"].shape[0])
         direction = np.zeros(4)
         direction[agent.dir.value] = 1.0

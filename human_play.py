@@ -19,7 +19,7 @@ import warnings
 import numpy as np
 import gymnasium as gym
 
-from rware.warehouse import Action, Warehouse, RewardType
+from rware.warehouse import Action, Warehouse, RewardType, ObservationType
 
 
 def parse_args():
@@ -58,8 +58,9 @@ class InteractiveRWAREEnv:
         self.env = Warehouse(
             shelf_columns=3,
             column_height=8,
-            shelf_rows=2,
+            shelf_rows=1,
             reward_type=RewardType.SHAPED,
+            observation_type=ObservationType.IMAGE_LAYOUT,
         )
         self.n_agents = self.env.unwrapped.n_agents
         self.running = True

@@ -26,6 +26,7 @@ def env_0():
     env.agents[0].carried_shelf = env.shelves[0]
 
     env.request_queue[0] = env.shelves[0]
+    env.request_queue[0].is_requested = True
     env._recalc_grid()
     return env
 
@@ -48,6 +49,7 @@ def env_1():
     env.agents[1].y = 3
 
     env.request_queue[0] = env.shelves[0]
+    env.request_queue[0].is_requested = True
     env._recalc_grid()
     return env
 
@@ -70,6 +72,7 @@ def env_2():
     env.agents[1].y = 3
 
     env.request_queue[0] = env.shelves[0]
+    env.request_queue[0].is_requested = True
     env._recalc_grid()
     return env
 
@@ -92,6 +95,7 @@ def env_3():
     env.agents[1].y = 3
 
     env.request_queue[0] = env.shelves[0]
+    env.request_queue[0].is_requested = True
     env._recalc_grid()
     return env
 

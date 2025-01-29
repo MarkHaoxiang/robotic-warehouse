@@ -27,7 +27,7 @@ class RewardType(Enum):
 class ShapedReward:
     """Designed to make the environment easier to learn, while (probably) not impacting the optimal policy"""
 
-    NOOP_PENALTY = 0.0  # A noop is usually sub-optimal
+    INVALID_OP_PENALTY = 0.0  # A noop is usually sub-optimal
     GOAL_POTENTIAL_REWARD = 0.05
 
     def __init__(self, layout: Layout):
@@ -74,7 +74,6 @@ class ShapedReward:
     def get_reward_for_moving_target_shelf(
         self, agent: Agent, i_pos: Point, e_pos: Point
     ) -> float:
-
         shelf = agent.carried_shelf
         i_pot = self.potential_from_goal[*i_pos]
         e_pot = self.potential_from_goal[*e_pos]
@@ -248,9 +247,6 @@ class Warehouse(gym.Env):
         self.renderer = None
         self.render_mode = render_mode
 
-    def _make_obs(self, agent: Agent):
-        return self.obs_generator.make_obs(agent, self)
-
     def _get_info(self):
         # TODO: Counter of delivered shelves?
         return {}
@@ -301,7 +297,7 @@ class Warehouse(gym.Env):
         for shelf in self.request_queue:
             shelf.is_requested = True
 
-        return tuple([self._make_obs(agent) for agent in self.agents]), self._get_info()
+        return self.obs_generator.make_obs(self), self._get_info()
 
     def step(
         self, actions: list[Action]
@@ -339,6 +335,9 @@ class Warehouse(gym.Env):
                 # this movement can succeed. Cancel it.
                 agent.req_action = Action.NOOP
                 G.add_edge(start, start)
+                if self.reward_type == RewardType.SHAPED:
+                    # Trying to put down a shelf when on a highway
+                    rewards[agent.key] -= ShapedReward.INVALID_OP_PENALTY
             else:
                 G.add_edge(start, target)
 
@@ -385,10 +384,10 @@ class Warehouse(gym.Env):
                         agent.carried_shelf in self.request_queue
                         and self.reward_type == RewardType.SHAPED
                     ):
-                        rewards[
-                            agent.key
-                        ] += self.shaped_reward.get_reward_for_moving_target_shelf(
-                            agent, agent.prev_pos, agent.pos
+                        rewards[agent.key] += (
+                            self.shaped_reward.get_reward_for_moving_target_shelf(
+                                agent, agent.prev_pos, agent.pos
+                            )
                         )
 
             elif agent.req_action in [Action.LEFT, Action.RIGHT]:
@@ -424,12 +423,14 @@ class Warehouse(gym.Env):
                     agent.has_delivered = False
                 elif self.reward_type == RewardType.SHAPED:
                     # Trying to put down a shelf when on a highway
-                    rewards[agent.key] -= ShapedReward.NOOP_PENALTY
+                    rewards[agent.key] -= ShapedReward.INVALID_OP_PENALTY
             elif (
-                agent.req_action == Action.NOOP
+                agent.req_action == Action.TOGGLE_LOAD
+                and not agent.carried_shelf
+                and not self._has_shelf_at(agent.pos)
                 and self.reward_type == RewardType.SHAPED
             ):
-                rewards[agent.key] -= ShapedReward.NOOP_PENALTY
+                rewards[agent.key] -= ShapedReward.INVALID_OP_PENALTY
 
         self._recalc_grid()
 
@@ -480,8 +481,7 @@ class Warehouse(gym.Env):
         truncated = False
 
         # print(rewards)
-
-        new_obs = tuple([self._make_obs(agent) for agent in self.agents])
+        new_obs = self.obs_generator.make_obs(self)
         info = self._get_info()
         return new_obs, list(rewards), done, truncated, info
 

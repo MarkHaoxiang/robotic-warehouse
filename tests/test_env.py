@@ -44,6 +44,7 @@ def env_0():
     env.agents[0].carried_shelf = env.shelves[0]
 
     env.request_queue[0] = env.shelves[0]
+    env.request_queue[0].is_requested = True
     env._recalc_grid()
     return env
 
@@ -336,7 +337,9 @@ def test_obs_space_0():
                 )
                 assert env.observation_space[i]["self"][key].contains(
                     obs[i]["self"][key]
-                ), f"{obs[i]['self'][key]} is not contained in {env.observation_space[i]['self'][key]}"
+                ), (
+                    f"{obs[i]['self'][key]} is not contained in {env.observation_space[i]['self'][key]}"
+                )
         for j in range(len(env.observation_space[i]["sensors"])):
             for key in env.observation_space[i]["sensors"][j].keys():
                 if key == "direction":
@@ -352,7 +355,9 @@ def test_obs_space_0():
                     )
                     assert env.observation_space[i]["sensors"][j][key].contains(
                         obs[i]["sensors"][j][key]
-                    ), f"{obs[i]['sensors'][j][key]} is not contained in {env.observation_space[i]['sensors'][j][key]}"
+                    ), (
+                        f"{obs[i]['sensors'][j][key]} is not contained in {env.observation_space[i]['sensors'][j][key]}"
+                    )
     obs, _, _, _, _ = env.step(env.action_space.sample())
     for i in range(env.unwrapped.n_agents):
         for key in env.observation_space[i]["self"].keys():
@@ -369,7 +374,9 @@ def test_obs_space_0():
                 )
                 assert env.observation_space[i]["self"][key].contains(
                     obs[i]["self"][key]
-                ), f"{obs[i]['self'][key]} is not contained in {env.observation_space[i]['self'][key]}"
+                ), (
+                    f"{obs[i]['self'][key]} is not contained in {env.observation_space[i]['self'][key]}"
+                )
         for j in range(len(env.observation_space[i]["sensors"])):
             for key in env.observation_space[i]["sensors"][j].keys():
                 if key == "direction":
@@ -385,7 +392,9 @@ def test_obs_space_0():
                     )
                     assert env.observation_space[i]["sensors"][j][key].contains(
                         obs[i]["sensors"][j][key]
-                    ), f"{obs[i]['sensors'][j][key]} is not contained in {env.observation_space[i]['sensors'][j][key]}"
+                    ), (
+                        f"{obs[i]['sensors'][j][key]} is not contained in {env.observation_space[i]['sensors'][j][key]}"
+                    )
 
 
 # def test_obs_space_2():
@@ -553,32 +562,32 @@ def test_reproducibility(env_0):
             )
 
         for i, (obs1, obs2) in enumerate(zip(obss1, obss2)):
-            assert np.array_equal(
-                obs1, obs2
-            ), f"Observations of env not identical for episode {i} with seed {seed}"
+            assert np.array_equal(obs1, obs2), (
+                f"Observations of env not identical for episode {i} with seed {seed}"
+            )
         for i, (g1, g2) in enumerate(zip(grid1, grid2)):
-            assert np.array_equal(
-                g1, g2
-            ), f"Grid of env not identical for episode {i} with seed {seed}"
+            assert np.array_equal(g1, g2), (
+                f"Grid of env not identical for episode {i} with seed {seed}"
+            )
         for i, (h1, h2) in enumerate(zip(highways1, highways2)):
-            assert np.array_equal(
-                h1, h2
-            ), f"Highways of env not identical for episode {i} with seed {seed}"
+            assert np.array_equal(h1, h2), (
+                f"Highways of env not identical for episode {i} with seed {seed}"
+            )
         for i, (rq1, rq2) in enumerate(zip(request_queue1, request_queue2)):
-            assert np.array_equal(
-                rq1, rq2
-            ), f"Request queue of env not identical for episode {i} with seed {seed}"
+            assert np.array_equal(rq1, rq2), (
+                f"Request queue of env not identical for episode {i} with seed {seed}"
+            )
         for i, (p1, p2) in enumerate(zip(player_pos1, player_pos2)):
-            assert np.array_equal(
-                p1, p2
-            ), f"Player pos of env not identical for episode {i} with seed {seed}"
+            assert np.array_equal(p1, p2), (
+                f"Player pos of env not identical for episode {i} with seed {seed}"
+            )
         for i, (pc1, pc2) in enumerate(zip(player_carrying1, player_carrying2)):
-            assert np.array_equal(
-                pc1, pc2
-            ), f"Player carrying of env not identical for episode {i} with seed {seed}"
+            assert np.array_equal(pc1, pc2), (
+                f"Player carrying of env not identical for episode {i} with seed {seed}"
+            )
         for i, (pd1, pd2) in enumerate(
             zip(player_has_delivered1, player_has_delivered2)
         ):
-            assert np.array_equal(
-                pd1, pd2
-            ), f"Player has delivered of env not identical for episode {i} with seed {seed}"
+            assert np.array_equal(pd1, pd2), (
+                f"Player has delivered of env not identical for episode {i} with seed {seed}"
+            )
