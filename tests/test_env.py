@@ -7,7 +7,7 @@ import pytest
 from expecttest import assert_expected_inline
 
 from rware.layout import Layout
-from rware.observation import ObservationType
+from rware.observation import ObservationRegistry
 from rware.utils.typing import Direction, ImageLayer
 from rware.warehouse import (
     Warehouse,
@@ -280,14 +280,14 @@ def test_action_space_3():
 @pytest.mark.parametrize(
     "observation_type",
     [
-        ObservationType.DICT,
-        ObservationType.FLATTENED,
-        ObservationType.IMAGE,
-        ObservationType.IMAGE_DICT,
-        ObservationType.IMAGE_LAYOUT,
+        ObservationRegistry.DICT,
+        ObservationRegistry.FLATTENED,
+        ObservationRegistry.IMAGE,
+        ObservationRegistry.IMAGE_DICT,
+        ObservationRegistry.IMAGE_LAYOUT,
     ],
 )
-def test_obs_space_contains(observation_type: ObservationType):
+def test_obs_space_contains(observation_type: ObservationRegistry):
     env = Warehouse(
         shelf_columns=1,
         column_height=3,
@@ -319,7 +319,7 @@ def test_obs_space_0():
         max_inactivity_steps=None,
         max_steps=None,
         reward_type=RewardType.GLOBAL,
-        observation_type=ObservationType.DICT,
+        observation_type=ObservationRegistry.DICT,
     )
     obs, _ = env.reset()
     for i in range(env.unwrapped.n_agents):

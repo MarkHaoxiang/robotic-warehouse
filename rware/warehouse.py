@@ -14,7 +14,7 @@ from rware.utils.typing import ImageLayer, Direction, Point  # Re-export unused
 from rware.utils import map_none
 from rware.layout import Layout
 from rware.entity import Action, Agent, Shelf, _LAYER_SHELVES, _LAYER_AGENTS
-from rware.observation import ObservationType, make_global_image
+from rware.observation import Observation, ObservationRegistry, make_global_image
 
 
 class RewardType(Enum):
@@ -27,7 +27,7 @@ class RewardType(Enum):
 class ShapedReward:
     """Designed to make the environment easier to learn, while (probably) not impacting the optimal policy"""
 
-    INVALID_OP_PENALTY = 0.0  # A noop is usually sub-optimal
+    INVALID_OP_PENALTY = 0.01
     GOAL_POTENTIAL_REWARD = 0.05
 
     def __init__(self, layout: Layout):
@@ -114,7 +114,7 @@ class Warehouse(gym.Env):
         max_steps: int | None = None,
         reward_type: RewardType = RewardType.GLOBAL,
         layout: Layout | str | None = None,
-        observation_type: ObservationType = ObservationType.FLATTENED,
+        observation_type: Observation = ObservationRegistry.FLATTENED,
         image_observation_layers: list[ImageLayer] = [
             ImageLayer.SHELVES,
             ImageLayer.REQUESTS,
@@ -122,8 +122,6 @@ class Warehouse(gym.Env):
             ImageLayer.GOALS,
             ImageLayer.ACCESSIBLE,
         ],
-        image_observation_directional: bool = True,
-        normalised_coordinates: bool = False,
         render_mode: str = "human",
     ):
         """The robotic warehouse environment
@@ -182,12 +180,6 @@ class Warehouse(gym.Env):
         :param image_observation_layers: Specifies types of layers observed if image-observations
             are used
         :type image_observation_layers: list[ImageLayer]
-        :param image_observation_directional: Specifies whether image observations should be
-            rotated to be directional (agent perspective) if image-observations are used
-        :type image_observation_directional: bool
-        :param normalised_coordinates: Specifies whether absolute coordinates should be normalised
-            with respect to total warehouse size
-        :type normalised_coordinates: bool
         """
         self.reward_range = (0, 1)
         self.reward_type = reward_type
@@ -221,8 +213,6 @@ class Warehouse(gym.Env):
         self._cur_steps = 0
         self.max_steps = max_steps
 
-        self.normalised_coordinates = normalised_coordinates
-
         # Compute action spaces
         sa_action_space = [len(Action), *msg_bits * (2,)]
         if len(sa_action_space) == 1:
@@ -238,9 +228,7 @@ class Warehouse(gym.Env):
 
         # Compute Observation spaces
         self.image_observation_layers = image_observation_layers
-        self.image_observation_directional = image_observation_directional
-        self.obs_type = observation_type
-        self.obs_generator = ObservationType.get(observation_type).from_warehouse(self)
+        self.obs_generator = observation_type.from_warehouse(self)
         self.observation_space = self.obs_generator.space
 
         self.global_image = None

@@ -2,7 +2,7 @@ from typing import Optional
 import importlib
 import pytest
 
-from rware.warehouse import Warehouse, RewardType, ObservationType
+from rware.warehouse import Warehouse, RewardType, ObservationRegistry
 
 _has_pettingzoo = importlib.util.find_spec("pettingzoo") is not None
 if _has_pettingzoo:
@@ -18,10 +18,10 @@ if _has_pettingzoo:
 @pytest.mark.parametrize(
     "observation_type",
     [
-        ObservationType.DICT,
-        ObservationType.IMAGE,
-        ObservationType.IMAGE_DICT,
-        ObservationType.FLATTENED,
+        ObservationRegistry.DICT,
+        ObservationRegistry.IMAGE,
+        ObservationRegistry.IMAGE_DICT,
+        ObservationRegistry.FLATTENED,
     ],
 )
 def test_pettingzoo_wrapper(
@@ -30,7 +30,7 @@ def test_pettingzoo_wrapper(
     sensor_range: int,
     max_inactivity_steps: Optional[int],
     reward_type: RewardType,
-    observation_type: ObservationType,
+    observation_type: ObservationRegistry,
 ):
     if not _has_pettingzoo:
         pytest.skip("PettingZoo not available.")

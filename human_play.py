@@ -13,13 +13,14 @@ You can control the interaction with the following keys:
 - D: display agent info (per step)
 - ESC: exit
 """
+
 from argparse import ArgumentParser
 import warnings
 
 import numpy as np
 import gymnasium as gym
 
-from rware.warehouse import Action, Warehouse, RewardType, ObservationType
+from rware.warehouse import Action, Warehouse, RewardType, ObservationRegistry
 
 
 def parse_args():
@@ -60,7 +61,7 @@ class InteractiveRWAREEnv:
             column_height=8,
             shelf_rows=1,
             reward_type=RewardType.SHAPED,
-            observation_type=ObservationType.IMAGE_LAYOUT,
+            observation_type=ObservationRegistry.IMAGE_LAYOUT,
         )
         self.n_agents = self.env.unwrapped.n_agents
         self.running = True

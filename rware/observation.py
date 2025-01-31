@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from enum import Enum
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -19,26 +18,6 @@ if TYPE_CHECKING:
     from .warehouse import Warehouse
 
 
-class ObservationType(Enum):
-    # TODO markli: This should be a config generator object that acts as a factor for _Observation
-    DICT = 0
-    FLATTENED = 1
-    IMAGE = 2
-    IMAGE_DICT = 3
-    IMAGE_LAYOUT = 4
-
-    @staticmethod
-    def get(observation_type: ObservationType) -> type[_Observation]:
-        types = [
-            DictObservation,
-            FlattenedObservation,
-            ImageObservation,
-            ImageDictObservation,
-            ImageLayoutObservation,
-        ]
-        return types[observation_type.value]
-
-
 class _VectorWriter:
     def __init__(self, size: int):
         self.vector = np.zeros(size, dtype=np.float32)
@@ -53,19 +32,17 @@ class _VectorWriter:
         self.idx += bits
 
 
-class _Observation(ABC):
-    def __init__(self, warehouse: Warehouse):
+class Observation(ABC):
+    def __init__(self):
         super().__init__()
-        self.space = self.reset_space(warehouse)
 
-    @classmethod
-    def from_warehouse(cls, warehouse: Warehouse):
-        return cls(warehouse)
+    def from_warehouse(self, warehouse: Warehouse):
+        self.space = self.reset_space(warehouse)
+        return self
 
     def reset_space(self, warehouse: Warehouse):
         self.msg_bits = warehouse.msg_bits
         self.sensor_range = warehouse.sensor_range
-        self.normalised_coordinates = warehouse.normalised_coordinates
         self.n_agents = warehouse.n_agents
         space = self._reset_space(warehouse)
         return space
@@ -83,9 +60,10 @@ class _Observation(ABC):
         return NotImplementedError()
 
 
-class DictObservation(_Observation):
-    def __init__(self, warehouse: Warehouse):
-        super().__init__(warehouse)
+class DictObservation(Observation):
+    def __init__(self, normalised_coordinates: bool = False):
+        super().__init__()
+        self.normalised_coordinates = normalised_coordinates
 
     def _reset_space(self, warehouse):
         self._obs_bits_for_self = 4 + len(Direction)
@@ -203,12 +181,15 @@ class DictObservation(_Observation):
         return obs
 
 
-class FlattenedObservation(_Observation):
-    def __init__(self, warehouse: Warehouse):
-        super().__init__(warehouse)
+class FlattenedObservation(Observation):
+    def __init__(self, normalised_coordinates: bool = False):
+        super().__init__()
+        self.normalised_coordinates = normalised_coordinates
 
     def _reset_space(self, warehouse):
-        observation_space = DictObservation(warehouse).space
+        observation_space = (
+            DictObservation(self.normalised_coordinates).from_warehouse(warehouse).space
+        )
 
         ma_spaces = []
         for sa_obs in observation_space:
@@ -274,13 +255,13 @@ class FlattenedObservation(_Observation):
         return obs.vector
 
 
-class ImageObservation(_Observation):
-    def __init__(self, warehouse: Warehouse):
-        super().__init__(warehouse)
+class ImageObservation(Observation):
+    def __init__(self, directional: bool = True):
+        super().__init__()
+        self.directional = directional
 
     def _reset_space(self, warehouse: Warehouse):
         self.image_observation_layers = warehouse.image_observation_layers
-        self.directional = warehouse.image_observation_directional
         observation_shape = (1 + 2 * self.sensor_range, 1 + 2 * self.sensor_range)
 
         layers_min = []
@@ -338,7 +319,7 @@ class ImageObservation(_Observation):
         return obs
 
 
-class ImageLayoutObservation(_Observation):
+class ImageLayoutObservation(Observation):
     """When the global layout is known to all agents.
 
     The global layout consists of the locations of shelves and goals.
@@ -491,9 +472,15 @@ class ImageLayoutObservation(_Observation):
         }
 
 
-class ImageDictObservation(_Observation):
+class ImageDictObservation(Observation):
+    def __init__(self, directional: bool = True):
+        super().__init__()
+        self.directional = directional
+
     def _reset_space(self, warehouse: Warehouse):
-        self.image_generator = ImageObservation(warehouse)
+        self.image_generator = ImageObservation(
+            directional=self.directional
+        ).from_warehouse(warehouse)
         observation_space = self.image_generator.space[0]
 
         feature_space = s.Dict(
@@ -621,3 +608,21 @@ def make_global_image(
 
 def _make_multiagent_space(agent_space: Space, n_agents: int) -> s.Tuple:
     return s.Tuple((agent_space for _ in range(n_agents)))
+
+
+class ObservationRegistry:
+    """A set of reasonable defaults for observations"""
+
+    _DEFAULT_IMAGE_OBSERVATION_LAYERS = [
+        ImageLayer.SHELVES,
+        ImageLayer.REQUESTS,
+        ImageLayer.AGENTS,
+        ImageLayer.GOALS,
+        ImageLayer.ACCESSIBLE,
+    ]
+
+    DICT = DictObservation(normalised_coordinates=False)
+    FLATTENED = FlattenedObservation(normalised_coordinates=False)
+    IMAGE = ImageObservation(directional=True)
+    IMAGE_DICT = ImageDictObservation()
+    IMAGE_LAYOUT = ImageLayoutObservation()

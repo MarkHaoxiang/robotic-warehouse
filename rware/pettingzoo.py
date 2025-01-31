@@ -45,7 +45,9 @@ class PettingZooWrapper(ParallelEnv):
         }
         return obs, info
 
-    def step(self, actions: dict[AgentID, ActionType]) -> Tuple[
+    def step(
+        self, actions: dict[AgentID, ActionType]
+    ) -> Tuple[
         dict[AgentID, ObsType],
         dict[AgentID, float],
         dict[AgentID, bool],
@@ -56,9 +58,9 @@ class PettingZooWrapper(ParallelEnv):
         actions_unwrapped = [(int(id_) - 1, action) for id_, action in actions.items()]
         actions_unwrapped.sort(key=lambda x: x[0])
         actions_unwrapped = [x[1] for x in actions_unwrapped]
-        assert (
-            len(actions_unwrapped) == self._env.n_agents
-        ), f"Incorrect number of actions provided. Expected {self._env.n_agents} but got {len(actions_unwrapped)}"
+        assert len(actions_unwrapped) == self._env.n_agents, (
+            f"Incorrect number of actions provided. Expected {self._env.n_agents} but got {len(actions_unwrapped)}"
+        )
 
         # Step inner environment
         obs, rewards, terminated, truncated, info = self._env.step(actions_unwrapped)
