@@ -2,7 +2,7 @@ import itertools
 
 from gymnasium import register
 
-from rware.warehouse import RewardType, ObservationRegistry
+from rware.warehouse import RewardRegistry, ObservationRegistry
 
 _sizes = {
     "tiny": (1, 3),
@@ -34,7 +34,7 @@ for size, diff, agents in _perms:
             "request_queue_size": int(agents * _difficulty[diff]),
             "max_inactivity_steps": None,
             "max_steps": 500,
-            "reward_type": RewardType.INDIVIDUAL,
+            "reward_type": RewardRegistry.INDIVIDUAL,
         },
     )
 
@@ -73,7 +73,7 @@ def image_registration():
                 "request_queue_size": int(agents * _difficulty[diff]),
                 "max_inactivity_steps": None,
                 "max_steps": 500,
-                "reward_type": RewardType.INDIVIDUAL,
+                "reward_type": RewardRegistry.INDIVIDUAL,
                 "observation_type": _observation_type[obs_type],
                 "image_observation_directional": _image_directional[directional],
             },
@@ -123,16 +123,16 @@ def full_registration():
                 "request_queue_size": int(agents * _difficulty[diff]),
                 "max_inactivity_steps": None,
                 "max_steps": 500,
-                "reward_type": RewardType.INDIVIDUAL,
+                "reward_type": RewardRegistry.INDIVIDUAL,
                 "observation_type": _observation_type[obs_type],
                 "image_observation_directional": _image_directional[directional],
             },
         )
 
     _rewards = {
-        "indiv": RewardType.INDIVIDUAL,
-        "global": RewardType.GLOBAL,
-        "twostage": RewardType.TWO_STAGE,
+        "indiv": RewardRegistry.INDIVIDUAL,
+        "global": RewardRegistry.GLOBAL,
+        "twostage": RewardRegistry.TWO_STAGE,
     }
 
     _perms = itertools.product(

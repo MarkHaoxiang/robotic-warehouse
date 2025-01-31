@@ -1,5 +1,6 @@
 from enum import Enum
 import numpy as np
+import gymnasium as gym
 
 from rware.utils.typing import Point, Direction
 
@@ -7,8 +8,23 @@ from rware.utils.typing import Point, Direction
 _LAYER_AGENTS = 0
 _LAYER_SHELVES = 1
 
+type ID = int
 
-class Action(Enum):
+
+class AgentActionSpace:
+    def __init__(self, msg_bits: int):
+        super().__init__()
+        self.msg_bits = msg_bits
+
+    @property
+    def space(self) -> gym.spaces.Discrete | gym.spaces.MultiDiscrete:
+        if self.msg_bits <= 0:
+            return gym.spaces.Discrete(len(AgentAction))
+        else:
+            return gym.spaces.MultiDiscrete([len(AgentAction), *self.msg_bits * (2,)])
+
+
+class AgentAction(Enum):
     NOOP = 0
     FORWARD = 1
     LEFT = 2
@@ -17,7 +33,7 @@ class Action(Enum):
 
 
 class Entity:
-    def __init__(self, id_: int, pos: Point):
+    def __init__(self, id_: ID, pos: Point):
         self.id = id_
         self.prev_pos = pos
         self.pos = pos
@@ -44,12 +60,11 @@ class Entity:
 
 
 class Agent(Entity):
-
-    def __init__(self, id_: int, pos: Point, dir_: Direction, msg_bits: int):
+    def __init__(self, id_: ID, pos: Point, dir_: Direction, msg_bits: int):
         super().__init__(id_, pos)
         self.dir = dir_
         self.message = np.zeros(msg_bits)
-        self.req_action: Action | None = None
+        self.req_action: AgentAction | None = None
         self.carried_shelf: Shelf | None = None
         self.canceled_action = None
         self.has_delivered = False
@@ -63,7 +78,7 @@ class Agent(Entity):
             return (_LAYER_AGENTS,)
 
     def req_location(self, grid_size) -> Point:
-        if self.req_action != Action.FORWARD:
+        if self.req_action != AgentAction.FORWARD:
             return self.pos
         elif self.dir == Direction.UP:
             return Point(self.x, max(0, self.y - 1))
@@ -80,16 +95,16 @@ class Agent(Entity):
 
     def req_direction(self) -> Direction:
         wraplist = [Direction.UP, Direction.RIGHT, Direction.DOWN, Direction.LEFT]
-        if self.req_action == Action.RIGHT:
+        if self.req_action == AgentAction.RIGHT:
             return wraplist[(wraplist.index(self.dir) + 1) % len(wraplist)]
-        elif self.req_action == Action.LEFT:
+        elif self.req_action == AgentAction.LEFT:
             return wraplist[(wraplist.index(self.dir) - 1) % len(wraplist)]
         else:
             return self.dir
 
 
 class Shelf(Entity):
-    def __init__(self, id_: int, pos: Point):
+    def __init__(self, id_: ID, pos: Point):
         super().__init__(id_, pos)
         self.is_requested = False
 

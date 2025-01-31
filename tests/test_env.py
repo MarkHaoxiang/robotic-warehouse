@@ -11,8 +11,8 @@ from rware.observation import ObservationRegistry
 from rware.utils.typing import Direction, ImageLayer
 from rware.warehouse import (
     Warehouse,
-    Action,
-    RewardType,
+    AgentAction,
+    RewardRegistry,
     ImageLayer,
 )
 
@@ -24,14 +24,14 @@ sys.path.insert(0, PROJECT_DIR)
 
 @pytest.fixture
 def env_single_agent():
-    env = Warehouse(3, 8, 3, 1, 0, 1, 5, None, None, RewardType.GLOBAL)
+    env = Warehouse(3, 8, 3, 1, 0, 1, 5, None, None, RewardRegistry.GLOBAL)
     env.reset()
     return env
 
 
 @pytest.fixture
 def env_0():
-    env = Warehouse(3, 8, 3, 1, 0, 1, 5, 10, None, RewardType.GLOBAL)
+    env = Warehouse(3, 8, 3, 1, 0, 1, 5, 10, None, RewardRegistry.GLOBAL)
     env.reset()
 
     env.agents[0].x = 4  # should place it in the middle (empty space)
@@ -181,7 +181,7 @@ def test_grid_size():
         request_queue_size=5,
         max_inactivity_steps=None,
         max_steps=None,
-        reward_type=RewardType.GLOBAL,
+        reward_type=RewardRegistry.GLOBAL,
     )
     assert env.grid_size == (4, 14)
     env = Warehouse(
@@ -194,7 +194,7 @@ def test_grid_size():
         request_queue_size=5,
         max_inactivity_steps=None,
         max_steps=None,
-        reward_type=RewardType.GLOBAL,
+        reward_type=RewardRegistry.GLOBAL,
     )
     assert env.grid_size == (10, 14)
 
@@ -210,10 +210,12 @@ def test_action_space_0():
         request_queue_size=5,
         max_inactivity_steps=None,
         max_steps=None,
-        reward_type=RewardType.GLOBAL,
+        reward_type=RewardRegistry.GLOBAL,
     )
     env.reset()
-    assert env.action_space == gym.spaces.Tuple(2 * (gym.spaces.Discrete(len(Action)),))
+    assert env.action_space == gym.spaces.Tuple(
+        2 * (gym.spaces.Discrete(len(AgentAction)),)
+    )
     env.step(env.action_space.sample())
 
 
@@ -228,11 +230,11 @@ def test_action_space_1():
         request_queue_size=5,
         max_inactivity_steps=None,
         max_steps=None,
-        reward_type=RewardType.GLOBAL,
+        reward_type=RewardRegistry.GLOBAL,
     )
     env.reset()
     assert env.action_space == gym.spaces.Tuple(
-        2 * (gym.spaces.MultiDiscrete([len(Action), 2]),)
+        2 * (gym.spaces.MultiDiscrete([len(AgentAction), 2]),)
     )
     env.step(env.action_space.sample())
 
@@ -248,11 +250,11 @@ def test_action_space_2():
         request_queue_size=5,
         max_inactivity_steps=None,
         max_steps=None,
-        reward_type=RewardType.GLOBAL,
+        reward_type=RewardRegistry.GLOBAL,
     )
     env.reset()
     assert env.action_space == gym.spaces.Tuple(
-        2 * (gym.spaces.MultiDiscrete([len(Action), 2, 2]),)
+        2 * (gym.spaces.MultiDiscrete([len(AgentAction), 2, 2]),)
     )
     env.step(env.action_space.sample())
 
@@ -268,11 +270,11 @@ def test_action_space_3():
         request_queue_size=5,
         max_inactivity_steps=None,
         max_steps=None,
-        reward_type=RewardType.GLOBAL,
+        reward_type=RewardRegistry.GLOBAL,
     )
     env.reset()
     assert env.action_space == gym.spaces.Tuple(
-        10 * (gym.spaces.MultiDiscrete([len(Action), *5 * (2,)]),)
+        10 * (gym.spaces.MultiDiscrete([len(AgentAction), *5 * (2,)]),)
     )
     env.step(env.action_space.sample())
 
@@ -299,7 +301,7 @@ def test_obs_space_contains(observation_type: ObservationRegistry):
         max_inactivity_steps=None,
         max_steps=None,
         observation_type=observation_type,
-        reward_type=RewardType.GLOBAL,
+        reward_type=RewardRegistry.GLOBAL,
     )
     obs, _ = env.reset()
     for _ in range(100):
@@ -318,7 +320,7 @@ def test_obs_space_0():
         request_queue_size=5,
         max_inactivity_steps=None,
         max_steps=None,
-        reward_type=RewardType.GLOBAL,
+        reward_type=RewardRegistry.GLOBAL,
         observation_type=ObservationRegistry.DICT,
     )
     obs, _ = env.reset()
@@ -418,24 +420,24 @@ def test_obs_space_0():
 def test_inactivity_0(env_0):
     env = env_0
     for i in range(9):
-        _, _, done, _, _ = env.step([Action.NOOP])
+        _, _, done, _, _ = env.step([AgentAction.NOOP])
         assert not done
-    _, _, done, _, _ = env.step([Action.NOOP])
+    _, _, done, _, _ = env.step([AgentAction.NOOP])
     assert done
 
 
 def test_inactivity_1(env_0):
     env = env_0
     for i in range(4):
-        _, _, done, _, _ = env.step([Action.NOOP])
+        _, _, done, _, _ = env.step([AgentAction.NOOP])
         assert not done
-    _, reward, _, _, _ = env.step([Action.FORWARD])
+    _, reward, _, _, _ = env.step([AgentAction.FORWARD])
     assert reward[0] == pytest.approx(1.0)
     for i in range(9):
-        _, _, done, _, _ = env.step([Action.NOOP])
+        _, _, done, _, _ = env.step([AgentAction.NOOP])
         assert not done
 
-    _, _, done, _, _ = env.step([Action.NOOP])
+    _, _, done, _, _ = env.step([AgentAction.NOOP])
     assert done
 
 
@@ -451,7 +453,7 @@ def test_time_limit(time_limit):
         request_queue_size=5,
         max_inactivity_steps=None,
         max_steps=time_limit,
-        reward_type=RewardType.GLOBAL,
+        reward_type=RewardRegistry.GLOBAL,
     )
     env.reset()
 
@@ -466,15 +468,15 @@ def test_time_limit(time_limit):
 def test_inactivity_2(env_0):
     env = env_0
     for i in range(9):
-        _, _, done, _, _ = env.step([Action.NOOP])
+        _, _, done, _, _ = env.step([AgentAction.NOOP])
         assert not done
-    _, _, done, _, _ = env.step([Action.NOOP])
+    _, _, done, _, _ = env.step([AgentAction.NOOP])
     assert done
     env.reset()
     for i in range(9):
-        _, _, done, _, _ = env.step([Action.NOOP])
+        _, _, done, _, _ = env.step([AgentAction.NOOP])
         assert not done
-    _, _, done, _, _ = env.step([Action.NOOP])
+    _, _, done, _, _ = env.step([AgentAction.NOOP])
     assert done
 
 

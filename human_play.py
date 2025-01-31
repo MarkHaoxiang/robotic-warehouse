@@ -20,7 +20,7 @@ import warnings
 import numpy as np
 import gymnasium as gym
 
-from rware.warehouse import Action, Warehouse, RewardType, ObservationRegistry
+from rware.warehouse import AgentAction, Warehouse, RewardRegistry, ObservationRegistry
 
 
 def parse_args():
@@ -60,7 +60,7 @@ class InteractiveRWAREEnv:
             shelf_columns=3,
             column_height=8,
             shelf_rows=1,
-            reward_type=RewardType.SHAPED,
+            reward_type=RewardRegistry.SHAPED,
             observation_type=ObservationRegistry.IMAGE_LAYOUT,
         )
         self.n_agents = self.env.unwrapped.n_agents
@@ -126,15 +126,15 @@ class InteractiveRWAREEnv:
         from pyglet.window import key
 
         if k == key.LEFT:
-            self.current_action = Action.LEFT
+            self.current_action = AgentAction.LEFT
         elif k == key.RIGHT:
-            self.current_action = Action.RIGHT
+            self.current_action = AgentAction.RIGHT
         elif k == key.UP:
-            self.current_action = Action.FORWARD
+            self.current_action = AgentAction.FORWARD
         elif k == key.P or k == key.L:
-            self.current_action = Action.TOGGLE_LOAD
+            self.current_action = AgentAction.TOGGLE_LOAD
         elif k == key.SPACE:
-            self.current_action = Action.NOOP
+            self.current_action = AgentAction.NOOP
         elif k == key.TAB:
             self.current_action = None
             self.current_agent_index = self._increment_current_agent_index(
@@ -174,7 +174,7 @@ class InteractiveRWAREEnv:
                     self._display_info(obss, [0] * self.n_agents, False)
 
             if self.current_action is not None:
-                actions = [Action.NOOP] * self.n_agents
+                actions = [AgentAction.NOOP] * self.n_agents
                 actions[self.current_agent_index] = self.current_action
                 obss, rews, done, trunc, info = self.env.step(
                     [act.value for act in actions]

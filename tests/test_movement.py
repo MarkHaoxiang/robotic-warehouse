@@ -3,7 +3,7 @@ import sys
 
 import pytest
 
-from rware.warehouse import Warehouse, Direction, Action, RewardType
+from rware.warehouse import Warehouse, Direction, AgentAction, RewardRegistry
 
 
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -13,7 +13,7 @@ sys.path.insert(0, PROJECT_DIR)
 
 @pytest.fixture
 def env_single_agent():
-    env = Warehouse(3, 8, 3, 1, 0, 1, 5, None, None, RewardType.GLOBAL)
+    env = Warehouse(3, 8, 3, 1, 0, 1, 5, None, None, RewardRegistry.GLOBAL)
     env.reset()
 
     return env
@@ -21,28 +21,28 @@ def env_single_agent():
 
 @pytest.fixture
 def env_two_agents():
-    env = Warehouse(3, 8, 3, 2, 0, 1, 5, None, None, RewardType.GLOBAL)
+    env = Warehouse(3, 8, 3, 2, 0, 1, 5, None, None, RewardRegistry.GLOBAL)
     env.reset()
     return env
 
 
 @pytest.fixture
 def env_three_agents():
-    env = Warehouse(3, 8, 3, 3, 0, 1, 5, None, None, RewardType.GLOBAL)
+    env = Warehouse(3, 8, 3, 3, 0, 1, 5, None, None, RewardRegistry.GLOBAL)
     env.reset()
     return env
 
 
 @pytest.fixture
 def env_four_agents():
-    env = Warehouse(3, 8, 3, 4, 0, 1, 5, None, None, RewardType.GLOBAL)
+    env = Warehouse(3, 8, 3, 4, 0, 1, 5, None, None, RewardRegistry.GLOBAL)
     env.reset()
     return env
 
 
 @pytest.fixture
 def env_five_agents():
-    env = Warehouse(3, 8, 3, 5, 0, 1, 5, None, None, RewardType.GLOBAL)
+    env = Warehouse(3, 8, 3, 5, 0, 1, 5, None, None, RewardRegistry.GLOBAL)
     env.reset()
     return env
 
@@ -54,7 +54,7 @@ def test_simple_movement_down(env_single_agent):
     env.agents[0].y = 25
     env.agents[0].dir = Direction.DOWN
     env._recalc_grid()
-    env.step([Action.FORWARD])
+    env.step([AgentAction.FORWARD])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 26
@@ -67,7 +67,7 @@ def test_simple_movement_up(env_single_agent):
     env.agents[0].y = 25
     env.agents[0].dir = Direction.UP
     env._recalc_grid()
-    env.step([Action.FORWARD])
+    env.step([AgentAction.FORWARD])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 24
@@ -80,7 +80,7 @@ def test_simple_movement_left(env_single_agent):
     env.agents[0].y = 25
     env.agents[0].dir = Direction.LEFT
     env._recalc_grid()
-    env.step([Action.FORWARD])
+    env.step([AgentAction.FORWARD])
 
     assert env.agents[0].x == 3
     assert env.agents[0].y == 25
@@ -93,7 +93,7 @@ def test_simple_movement_right(env_single_agent):
     env.agents[0].y = 25
     env.agents[0].dir = Direction.RIGHT
     env._recalc_grid()
-    env.step([Action.FORWARD])
+    env.step([AgentAction.FORWARD])
 
     assert env.agents[0].x == 5
     assert env.agents[0].y == 25
@@ -107,7 +107,7 @@ def test_movement_under_shelf(env_single_agent):
     env.agents[0].dir = Direction.RIGHT
     env._recalc_grid()
     for i in range(10):
-        env.step([Action.FORWARD])
+        env.step([AgentAction.FORWARD])
 
         assert env.agents[0].x == min(i + 1, 9)
         assert env.agents[0].y == 25
@@ -120,7 +120,7 @@ def test_simple_wall_collision_up(env_single_agent):
     env.agents[0].y = 0
     env.agents[0].dir = Direction.UP
     env._recalc_grid()
-    env.step([Action.FORWARD])
+    env.step([AgentAction.FORWARD])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 0
@@ -133,7 +133,7 @@ def test_simple_wall_collision_down(env_single_agent):
     env.agents[0].y = 28
     env.agents[0].dir = Direction.DOWN
     env._recalc_grid()
-    env.step([Action.FORWARD])
+    env.step([AgentAction.FORWARD])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 28
@@ -146,7 +146,7 @@ def test_simple_wall_collision_right(env_single_agent):
     env.agents[0].y = 25
     env.agents[0].dir = Direction.RIGHT
     env._recalc_grid()
-    env.step([Action.FORWARD])
+    env.step([AgentAction.FORWARD])
 
     assert env.agents[0].x == 9
     assert env.agents[0].y == 25
@@ -159,7 +159,7 @@ def test_simple_wall_collision_left(env_single_agent):
     env.agents[0].y = 25
     env.agents[0].dir = Direction.LEFT
     env._recalc_grid()
-    env.step([Action.FORWARD])
+    env.step([AgentAction.FORWARD])
 
     assert env.agents[0].x == 0
     assert env.agents[0].y == 25
@@ -176,7 +176,7 @@ def test_head_collision_0(env_two_agents):
     env.agents[1].y = 25
     env.agents[1].dir = Direction.LEFT
     env._recalc_grid()
-    env.step([Action.FORWARD, Action.FORWARD])
+    env.step([AgentAction.FORWARD, AgentAction.FORWARD])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 25
@@ -198,7 +198,7 @@ def test_head_collision_1(env_two_agents):
     env.agents[1].y = 25
     env.agents[1].dir = Direction.LEFT
     env._recalc_grid()
-    env.step([Action.FORWARD, Action.FORWARD])
+    env.step([AgentAction.FORWARD, AgentAction.FORWARD])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 25
@@ -221,7 +221,7 @@ def test_head_collision_2(env_two_agents):
     env.agents[1].dir = Direction.LEFT
     env.agents[1].carried_shelf = env.shelves[1]
     env._recalc_grid()
-    env.step([Action.FORWARD, Action.FORWARD])
+    env.step([AgentAction.FORWARD, AgentAction.FORWARD])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 25
@@ -243,7 +243,7 @@ def test_head_collision_3(env_two_agents):
     env.agents[1].y = 25
     env.agents[1].dir = Direction.RIGHT
     env._recalc_grid()
-    env.step([Action.FORWARD, Action.FORWARD])
+    env.step([AgentAction.FORWARD, AgentAction.FORWARD])
 
     assert env.agents[0].x == 3
     assert env.agents[0].y == 25
@@ -262,7 +262,7 @@ def test_chain_movement_1(env_two_agents):
     env.agents[1].y = 25
     env.agents[1].dir = Direction.RIGHT
     env._recalc_grid()
-    env.step([Action.FORWARD, Action.FORWARD])
+    env.step([AgentAction.FORWARD, AgentAction.FORWARD])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 25
@@ -281,7 +281,7 @@ def test_chain_movement_2(env_two_agents):
     env.agents[1].y = 25
     env.agents[1].dir = Direction.RIGHT
     env._recalc_grid()
-    env.step([Action.FORWARD, Action.FORWARD])
+    env.step([AgentAction.FORWARD, AgentAction.FORWARD])
 
     assert env.agents[0].x == 8
     assert env.agents[0].y == 25
@@ -305,7 +305,7 @@ def test_chain_movement_3(env_three_agents):
     env.agents[2].dir = Direction.UP
 
     env._recalc_grid()
-    env.step(3 * [Action.FORWARD])
+    env.step(3 * [AgentAction.FORWARD])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 25
@@ -334,7 +334,7 @@ def test_circle_chain_movement_0(env_four_agents):
     env.agents[3].dir = Direction.DOWN
 
     env._recalc_grid()
-    env.step(4 * [Action.FORWARD])
+    env.step(4 * [AgentAction.FORWARD])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 25
@@ -373,7 +373,7 @@ def test_circle_chain_movement_1(env_five_agents):
     env.agents[4].dir = Direction.LEFT
 
     env._recalc_grid()
-    env.step(5 * [Action.FORWARD])
+    env.step(5 * [AgentAction.FORWARD])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 25
@@ -399,7 +399,7 @@ def test_turn_right_0(env_single_agent):
     env.agents[0].y = 25
     env.agents[0].dir = Direction.UP
     env._recalc_grid()
-    env.step([Action.RIGHT])
+    env.step([AgentAction.RIGHT])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 25
@@ -413,7 +413,7 @@ def test_turn_right_1(env_single_agent):
     env.agents[0].y = 25
     env.agents[0].dir = Direction.RIGHT
     env._recalc_grid()
-    env.step([Action.RIGHT])
+    env.step([AgentAction.RIGHT])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 25
@@ -427,7 +427,7 @@ def test_turn_right_2(env_single_agent):
     env.agents[0].y = 25
     env.agents[0].dir = Direction.DOWN
     env._recalc_grid()
-    env.step([Action.RIGHT])
+    env.step([AgentAction.RIGHT])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 25
@@ -441,7 +441,7 @@ def test_turn_right_3(env_single_agent):
     env.agents[0].y = 25
     env.agents[0].dir = Direction.LEFT
     env._recalc_grid()
-    env.step([Action.RIGHT])
+    env.step([AgentAction.RIGHT])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 25
@@ -455,7 +455,7 @@ def test_turn_left_0(env_single_agent):
     env.agents[0].y = 25
     env.agents[0].dir = Direction.UP
     env._recalc_grid()
-    env.step([Action.LEFT])
+    env.step([AgentAction.LEFT])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 25
@@ -469,7 +469,7 @@ def test_turn_left_1(env_single_agent):
     env.agents[0].y = 25
     env.agents[0].dir = Direction.RIGHT
     env._recalc_grid()
-    env.step([Action.LEFT])
+    env.step([AgentAction.LEFT])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 25
@@ -483,7 +483,7 @@ def test_turn_left_2(env_single_agent):
     env.agents[0].y = 25
     env.agents[0].dir = Direction.DOWN
     env._recalc_grid()
-    env.step([Action.LEFT])
+    env.step([AgentAction.LEFT])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 25
@@ -497,7 +497,7 @@ def test_turn_left_3(env_single_agent):
     env.agents[0].y = 25
     env.agents[0].dir = Direction.LEFT
     env._recalc_grid()
-    env.step([Action.LEFT])
+    env.step([AgentAction.LEFT])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 25
@@ -516,7 +516,7 @@ def test_simple_carrying(env_single_agent):
     env.agents[0].carried_shelf = env.shelves[0]
 
     env._recalc_grid()
-    env.step([Action.FORWARD])
+    env.step([AgentAction.FORWARD])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 26
@@ -534,7 +534,7 @@ def test_simple_carrying_collision(env_single_agent):
     env.agents[0].carried_shelf = env.shelves[0]
 
     env._recalc_grid()
-    env.step([Action.FORWARD])
+    env.step([AgentAction.FORWARD])
 
     assert env.agents[0].x == 3
     assert env.agents[0].y == 25
@@ -557,7 +557,7 @@ def test_simple_carrying_chain(env_two_agents):
     env.agents[1].carried_shelf = env.shelves[1]
 
     env._recalc_grid()
-    env.step(2 * [Action.FORWARD])
+    env.step(2 * [AgentAction.FORWARD])
 
     assert env.agents[0].x == 4
     assert env.agents[0].y == 25
@@ -577,28 +577,28 @@ def test_pickup_and_carry_0(env_single_agent):
     env.agents[0].y = 25
     env.agents[0].dir = Direction.LEFT
     env._recalc_grid()
-    env.step([Action.FORWARD])
+    env.step([AgentAction.FORWARD])
 
-    env.step([Action.TOGGLE_LOAD])
+    env.step([AgentAction.TOGGLE_LOAD])
     assert env.agents[0].carried_shelf is not None
     shelf = env.agents[0].carried_shelf
     assert shelf.x == 2
     assert shelf.y == 25
-    env.step([Action.LEFT])
-    env.step([Action.LEFT])
-    env.step([Action.FORWARD])
+    env.step([AgentAction.LEFT])
+    env.step([AgentAction.LEFT])
+    env.step([AgentAction.FORWARD])
     assert env.agents[0].x == 3
     assert env.agents[0].y == 25
     assert shelf.x == 3
     assert shelf.y == 25
 
-    env.step([Action.FORWARD])
+    env.step([AgentAction.FORWARD])
     assert env.agents[0].x == 4
     assert env.agents[0].y == 25
     assert shelf.x == 4
     assert shelf.y == 25
-    env.step([Action.TOGGLE_LOAD])  # cannot unload on highway
-    env.step([Action.FORWARD])
+    env.step([AgentAction.TOGGLE_LOAD])  # cannot unload on highway
+    env.step([AgentAction.FORWARD])
     assert env.agents[0].x == 5
     assert env.agents[0].y == 25
     assert shelf.x == 5
@@ -612,16 +612,16 @@ def test_pickup_and_carry_1(env_single_agent):
     env.agents[0].y = 25
     env.agents[0].dir = Direction.LEFT
     env._recalc_grid()
-    env.step([Action.FORWARD])
-    env.step([Action.TOGGLE_LOAD])
+    env.step([AgentAction.FORWARD])
+    env.step([AgentAction.TOGGLE_LOAD])
     assert env.agents[0].carried_shelf is not None
     shelf = env.agents[0].carried_shelf
     assert shelf.x == 2
     assert shelf.y == 25
-    env.step([Action.LEFT])
-    env.step([Action.LEFT])
-    env.step([Action.TOGGLE_LOAD])  # can unload here
-    env.step([Action.FORWARD])
+    env.step([AgentAction.LEFT])
+    env.step([AgentAction.LEFT])
+    env.step([AgentAction.TOGGLE_LOAD])  # can unload here
+    env.step([AgentAction.FORWARD])
     assert env.agents[0].x == 3
     assert env.agents[0].y == 25
     assert shelf.x == 2

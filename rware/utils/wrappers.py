@@ -3,13 +3,13 @@ import math
 import gymnasium as gym
 import numpy as np
 
-from rware.warehouse import Action
+from rware.warehouse import AgentAction
 
 
 class FlattenAgents(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
-        sa_action_space = [len(Action), *env.msg_bits * (2,)]
+        sa_action_space = [len(AgentAction), *env.msg_bits * (2,)]
         if len(sa_action_space) == 1 and self.unwrapped.n_agents == 1:
             sa_action_space = gym.spaces.Discrete(sa_action_space[0])
         else:

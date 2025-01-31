@@ -52,9 +52,13 @@ class Observation(ABC):
         return NotImplementedError()
 
     def make_obs(self, warehouse: Warehouse):
+        self._prepare_obs(warehouse)
         return tuple(
             [self._make_agent_obs(agent, warehouse) for agent in warehouse.agents]
         )
+
+    def _prepare_obs(self, warehouse: Warehouse):
+        pass
 
     def _make_agent_obs(self, agent: Agent, warehouse: Warehouse):
         return NotImplementedError()
@@ -287,16 +291,15 @@ class ImageObservation(Observation):
             s.Box(min_obs, max_obs, dtype=np.float32), self.n_agents
         )
 
-    def _make_agent_obs(self, agent: Agent, warehouse: Warehouse):
-        if agent.id == 1:
-            # first agent's observation --> update global observation layers
-            layers = make_global_image(
-                warehouse,
-                image_layers=self.image_observation_layers,
-                padding_size=self.sensor_range,
-            )
-            self.global_layers = np.stack(layers)
+    def _prepare_obs(self, warehouse):
+        layers = make_global_image(
+            warehouse,
+            image_layers=self.image_observation_layers,
+            padding_size=self.sensor_range,
+        )
+        self.global_layers = np.stack(layers)
 
+    def _make_agent_obs(self, agent: Agent, warehouse: Warehouse):
         # global information was generated --> get information for agent
         start_x = agent.pos.x
         end_x = agent.pos.x + 2 * self.sensor_range + 1
@@ -406,14 +409,13 @@ class ImageLayoutObservation(Observation):
         )
         return _make_multiagent_space(agent_space, self.n_agents)
 
-    def make_obs(self, warehouse):
+    def _prepare_obs(self, warehouse):
         self.layout_image = self._make_layout_obs(warehouse.layout)
         layers = make_global_image(
             warehouse,
             image_layers=self.image_observation_layers,
         )
         self.global_layers = np.stack(layers)
-        return super().make_obs(warehouse)
 
     def _make_agent_obs(self, agent: Agent, warehouse: Warehouse):
         # Global information was generated --> get information for agent
@@ -505,6 +507,9 @@ class ImageDictObservation(Observation):
             s.Dict({"image": observation_space, "features": feature_space}),
             self.n_agents,
         )
+
+    def _prepare_obs(self, warehouse):
+        return self.image_generator._prepare_obs(warehouse)
 
     def _make_agent_obs(self, agent, warehouse):
         image_obs = self.image_generator._make_agent_obs(agent, warehouse)
