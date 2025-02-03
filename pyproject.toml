@@ -1,49 +1,28 @@
 [project]
 name = "rware"
-version = "2.0.0"
-description = "Multi-Robot Warehouse environment for reinforcement learning"
-readme = { content-type = "text/markdown", file = "README.md" }
-maintainers = [{ name = "Filippos Christianos" }]
-classifiers = [
-    "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3.10",
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "gymnasium>=1.0.0",
+    "networkx>=3.4.2",
+    "numpy>=2.2.2",
+    "pyglet<2",
+    "six>=1.17.0",
 ]
-requires-python = ">=3.10"
-urls = { github = "https://github.com/semitable/robotic-warehouse" }
-dependencies = ["numpy", "gymnasium", "pyglet<2", "networkx", "six"]
-
-[build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
 
 [project.optional-dependencies]
-test = ["pytest", "expecttest>=0.3.0,<0.4", "mypy"]
-pettingzoo = ["pettingzoo"]
+pettingzoo = ["pettingzoo>=1.24.3"]
 
-[tool.setuptools.packages.find]
-exclude = ["contrib", "docs", "tests"]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-# pixi
-[tool.pixi.workspace]
-channels = ["conda-forge"]
-platforms = ["linux-64"]
-preview = ["pixi-build"]
-
-[tool.pixi.environments]
-default = { solve-group = "default" }
-test = { features = ["test", "pettingzoo"], solve-group = "default" }
-
-[tool.pixi.pypi-dependencies]
-rware = { path = ".", editable = true }
-
-[tool.pixi.package]
-name = "rware"
-version = "2.0.0"
-
-[tool.pixi.build-system]
-build-backend = { name = "pixi-build-python", version = "*" }
-channels = ["pixi-build-backends", "conda-forge"]
-
-[tool.pixi.feature.test.tasks]
-test = "pytest"
-expecttest = "EXPECTTEST_ACCEPT=1 pytest"
+[dependency-groups]
+dev = [
+    "mypy>=1.14.1",
+    "pytest>=8.3.4",
+    "ruff>=0.9.3",
+    "expecttest>=0.3.0",
+]
