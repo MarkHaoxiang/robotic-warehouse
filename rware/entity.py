@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import TypeAlias
 import numpy as np
 import gymnasium as gym
 
@@ -8,7 +9,7 @@ from rware.utils.typing import Point, Direction
 _LAYER_AGENTS = 0
 _LAYER_SHELVES = 1
 
-type ID = int
+ID: TypeAlias = int
 
 
 class AgentActionSpace:

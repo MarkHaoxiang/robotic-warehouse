@@ -56,7 +56,6 @@ class Reward(ABC):
         for event in events:
             self.process_event(event, rewards)
 
-        print(rewards)
         return list(rewards)
 
     def process_event(self, event: Event, rewards: np.ndarray) -> None:
@@ -134,7 +133,7 @@ class Shaped(Reward):
             reward = (
                 0.5
                 - self.GOAL_POTENTIAL_REWARD
-                + self.shelf_initial_potential.get(event.shelf_id, 0.0)
+                + self.shelf_initial_potential.get(event.shelf_id)
             )
             self.shelf_initial_potential.pop(event.shelf_id)
             rewards[event.agent_id - 1] += reward
@@ -145,15 +144,13 @@ class Shaped(Reward):
                 rewards[event.agent_id - 1] -= 0.25
         elif isinstance(event, PickupShelf) and event.is_requested:
             rewards[event.agent_id - 1] += 0.25
+            self.shelf_initial_potential[event.shelf_id] = self.potential_from_goal[
+                *event.loc
+            ]
         elif isinstance(event, MoveShelf) and event.is_requested:
             i_pot = self.potential_from_goal[*event.start]
             e_pot = self.potential_from_goal[*event.end]
             reward = e_pot - i_pot
-
-            if event.shelf_id not in self.shelf_initial_potential:
-                # Initial pickup
-                self.shelf_initial_potential[event.shelf_id] = i_pot
-
             rewards[event.agent_id - 1] += reward
 
 
