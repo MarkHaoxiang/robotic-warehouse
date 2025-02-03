@@ -8,8 +8,7 @@ dependencies = [
     "gymnasium>=1.0.0",
     "networkx>=3.4.2",
     "numpy>=2.2.2",
-    "pyglet<2",
-    "six>=1.17.0",
+    "pyglet>=2.1",
 ]
 
 [project.optional-dependencies]

@@ -62,6 +62,7 @@ class InteractiveRWAREEnv:
             shelf_rows=1,
             reward_type=RewardRegistry.SHAPED,
             observation_type=ObservationRegistry.IMAGE_LAYOUT,
+            render_mode="human",
         )
         self.n_agents = self.env.unwrapped.n_agents
         self.running = True

@@ -52,7 +52,7 @@ class Warehouse(gym.Env):
             ImageLayer.GOALS,
             ImageLayer.ACCESSIBLE,
         ],
-        render_mode: str | None = None,
+        render_mode: str | None = "rgb_array",
     ):
         """The robotic warehouse environment
 
