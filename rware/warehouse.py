@@ -27,7 +27,7 @@ from rware.reward import Reward, RewardRegistry
 
 class Warehouse(gym.Env):
     metadata = {
-        "render_modes": ["human", "rgb_array"],
+        "render_modes": ["human", "rgb_array", None],
         "render_fps": 10,
     }
 
@@ -52,7 +52,7 @@ class Warehouse(gym.Env):
             ImageLayer.GOALS,
             ImageLayer.ACCESSIBLE,
         ],
-        render_mode: str = "human",
+        render_mode: str | None = None,
     ):
         """The robotic warehouse environment
 
@@ -387,6 +387,9 @@ class Warehouse(gym.Env):
         return new_obs, rewards, done, truncated, info
 
     def render(self):
+        if self.render_mode is None:
+            return None
+
         if not self.renderer:
             from rware.rendering import Viewer
 
