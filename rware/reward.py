@@ -1,7 +1,7 @@
 from abc import ABC
 from dataclasses import dataclass
 
-import networkx as nx
+import networkx as nx  # type: ignore
 import numpy as np
 
 from rware.utils.typing import Point
@@ -85,9 +85,14 @@ class TwoStage(Reward):
 class Shaped(Reward):
     """Designed to make the environment easier to learn, while (probably) not impacting the optimal policy"""
 
-    def __init__(self, goal_potential_reward: float = 0.05):
+    def __init__(
+        self,
+        goal_potential_reward: float = 0.05,
+        non_requested_pickup_penalty: float = 0.05,
+    ):
         super().__init__()
         self.GOAL_POTENTIAL_REWARD = goal_potential_reward
+        self.BAD_PICKUP_PENALTY = non_requested_pickup_penalty
 
     def reset(self, n_agents, layout):
         super().reset(n_agents, layout)
@@ -130,32 +135,44 @@ class Shaped(Reward):
 
     def process_event(self, event, rewards):
         if isinstance(event, DeliveredRequest):
-            reward = (
+            r = (
                 0.5
                 - self.GOAL_POTENTIAL_REWARD
-                + self.shelf_initial_potential.get(event.shelf_id)
+                + self.shelf_initial_potential.get(
+                    event.shelf_id, self.GOAL_POTENTIAL_REWARD
+                )
             )
-            self.shelf_initial_potential.pop(event.shelf_id)
-            rewards[event.agent_id - 1] += reward
+            # Note here, we catch the edge case where a request queue selects a shelf
+            # That is currently being carried by the agent
+            if event.shelf_id in self.shelf_initial_potential:
+                self.shelf_initial_potential.pop(event.shelf_id)
+            rewards[event.agent_id - 1] += r
         elif isinstance(event, DropoffShelf):
             if event.is_delivered:
                 rewards[event.agent_id - 1] += 0.25
             elif event.is_requested:
                 rewards[event.agent_id - 1] -= 0.25
-        elif isinstance(event, PickupShelf) and event.is_requested:
-            rewards[event.agent_id - 1] += 0.25
-            self.shelf_initial_potential[event.shelf_id] = self.potential_from_goal[
-                *event.loc
-            ]
+            else:
+                rewards[event.agent_id - 1] += self.BAD_PICKUP_PENALTY
+        elif isinstance(event, PickupShelf):
+            if event.is_requested:
+                rewards[event.agent_id - 1] += 0.25
+                self.shelf_initial_potential[event.shelf_id] = self.potential_from_goal[
+                    *event.loc
+                ]
+            else:
+                rewards[event.agent_id - 1] -= self.BAD_PICKUP_PENALTY
         elif isinstance(event, MoveShelf) and event.is_requested:
             i_pot = self.potential_from_goal[*event.start]
             e_pot = self.potential_from_goal[*event.end]
-            reward = e_pot - i_pot
-            rewards[event.agent_id - 1] += reward
+            r = e_pot - i_pot
+            rewards[event.agent_id - 1] += r
+
+        # print(rewards)
 
 
 class RewardRegistry:
     GLOBAL = Global()
     INDIVIDUAL = Individual()
     TWO_STAGE = TwoStage()
-    SHAPED = Shaped(goal_potential_reward=0.05)
+    SHAPED = Shaped(goal_potential_reward=0.05, non_requested_pickup_penalty=0.05)

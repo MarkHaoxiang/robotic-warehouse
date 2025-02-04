@@ -308,46 +308,40 @@ class ImageObservation(Observation):
         obs = self.global_layers[:, start_x:end_x, start_y:end_y]
 
         if self.directional:
-            # rotate image to be in direction of agent
-            if agent.dir == Direction.DOWN:
-                # rotate by 180 degrees (clockwise)
-                obs = np.rot90(obs, k=2, axes=(1, 2))
-            elif agent.dir == Direction.LEFT:
-                # rotate by 90 degrees (clockwise)
-                obs = np.rot90(obs, k=3, axes=(1, 2))
-            elif agent.dir == Direction.RIGHT:
-                # rotate by 270 degrees (clockwise)
-                obs = np.rot90(obs, k=1, axes=(1, 2))
-            # no rotation needed for UP direction
+            obs = _rotate_obs(obs, agent.dir)
         return obs
 
 
 class ImageLayoutObservation(Observation):
-    """When the global layout is known to all agents.
+    """When the global layout is known to all agents."""
 
-    The global layout consists of the locations of shelves and goals.
-
-    This observation is most similar to the ImageDictObservation setting, but we extend the Image obs to the entire layout.
-    masking out areas outside of sensor range.
-    """
+    def __init__(
+        self, image_observation_layers: list[ImageLayer], directional: bool = True
+    ):
+        super().__init__()
+        self.image_observation_layers = image_observation_layers
+        self.directional = directional
 
     def _make_layout_obs(self, layout: Layout) -> np.ndarray:
-        shelves = 1 - layout.highways.copy()
-        goals = np.zeros_like(shelves)
+        shelves_locations = 1 - layout.highways.copy()
+        goals = np.zeros_like(shelves_locations)
         for goal in layout.goals:
             goals[*goal] = 1
-        return np.stack((shelves, goals), axis=0, dtype=np.float32)
+        return np.stack((shelves_locations, goals), axis=0, dtype=np.float32)
 
     def _reset_space(self, warehouse: Warehouse):
-        self.image_observation_layers = warehouse.image_observation_layers
-
         # Feature layers
-        feature_space = s.Dict(
+        feature_space_dict = s.Dict(
             OrderedDict(
-                {"direction": s.Discrete(4), "carrying_shelf": s.MultiBinary(1)}
+                {
+                    "direction": s.Discrete(4),
+                    "carrying_shelf": s.MultiBinary(1),
+                    "on_highway": s.MultiBinary(1),
+                    "on_shelf_requested": s.MultiBinary(1),
+                }
             )
         )
-        feature_flat_dim = s.flatdim(feature_space)
+        feature_flat_dim = s.flatdim(feature_space_dict)
         feature_space = (
             s.Box(  # TODO: We should adapt this function to have correct low and high.
                 low=-float("inf"),
@@ -357,13 +351,7 @@ class ImageLayoutObservation(Observation):
             )
         )
 
-        # size = warehouse.grid_size
         size = (1 + 2 * self.sensor_range, 1 + 2 * self.sensor_range)
-        # layers_min = [
-        #     np.zeros(size, dtype=np.float32),
-        #     np.zeros(size, dtype=np.float32),
-        # ]
-        # layers_max = [np.ones(size, dtype=np.float32), np.ones(size, dtype=np.float32)]
         layers_min = []
         layers_max = []
         for layer in self.image_observation_layers:
@@ -445,6 +433,9 @@ class ImageLayoutObservation(Observation):
 
         local_image = image[:, start_x:end_x, start_y:end_y]
 
+        if self.directional:
+            local_image = _rotate_obs(local_image, agent.dir)
+
         # mask = np.zeros_like(image)
         # image = image * mask
         # image = np.concat((self.layout_image, image), axis=0)
@@ -459,13 +450,14 @@ class ImageLayoutObservation(Observation):
                 int(agent.carried_shelf is not None),
             ]
         )
-
-        # if agent.id == 1:
-        #     print(feature_obs.vector, self.image_observation_layers)
-
-        # assert self._reset_space(warehouse)[0]["local_image"].contains(local_image)
-        # print(self._reset_space(warehouse)[0]["global_image"])
-        # assert self._reset_space(warehouse)[0]["global_image"].contains(global_image)
+        feature_obs.write([int(warehouse.layout.is_highway(agent.pos))])
+        is_requested = [0]
+        if (
+            warehouse._has_shelf_at(agent.pos)
+            and warehouse._get_shelf_at(agent.pos).is_requested
+        ):
+            is_requested[0] = 1
+        feature_obs.write(is_requested)
 
         return {
             "local_image": local_image,
@@ -485,7 +477,7 @@ class ImageDictObservation(Observation):
         ).from_warehouse(warehouse)
         observation_space = self.image_generator.space[0]
 
-        feature_space = s.Dict(
+        feature_space_dict = s.Dict(
             OrderedDict(
                 {
                     "direction": s.Discrete(4),
@@ -495,7 +487,7 @@ class ImageDictObservation(Observation):
             )
         )
 
-        feature_flat_dim = s.flatdim(feature_space)
+        feature_flat_dim = s.flatdim(feature_space_dict)
         feature_space = s.Box(
             low=-float("inf"),
             high=float("inf"),
@@ -602,6 +594,8 @@ def make_global_image(
                 layer = np.ones(warehouse.grid_size, dtype=np.float32)
                 for ag in warehouse.agents:
                     layer[*ag.pos] = 0.0
+            case ImageLayer.STORAGE:
+                layer = 1 - warehouse.layout.highways.copy()
             case _:
                 raise ValueError(f"Unknown image layer type: {layer_type}")
         # pad with 0s for out-of-map cells
@@ -609,6 +603,21 @@ def make_global_image(
             layer = np.pad(layer, padding_size, mode="constant")
         layers.append(layer)
     return layers
+
+
+def _rotate_obs(obs: np.ndarray, dir: Direction):
+    # rotate image to be in direction of agent
+    # printing out obs matches the natural direction expected
+    # where forward is the first row in the array
+    if dir == Direction.UP:
+        obs = np.rot90(obs, k=1, axes=(1, 2))
+    elif dir == Direction.RIGHT:
+        obs = np.rot90(obs, k=2, axes=(1, 2))
+    elif dir == Direction.DOWN:
+        obs = np.rot90(obs, k=3, axes=(1, 2))
+    elif dir == Direction.LEFT:
+        pass
+    return obs
 
 
 def _make_multiagent_space(agent_space: Space, n_agents: int) -> s.Tuple:
@@ -624,10 +633,13 @@ class ObservationRegistry:
         ImageLayer.AGENTS,
         ImageLayer.GOALS,
         ImageLayer.ACCESSIBLE,
+        ImageLayer.STORAGE,
     ]
 
     DICT = DictObservation(normalised_coordinates=False)
     FLATTENED = FlattenedObservation(normalised_coordinates=False)
     IMAGE = ImageObservation(directional=True)
     IMAGE_DICT = ImageDictObservation()
-    IMAGE_LAYOUT = ImageLayoutObservation()
+    IMAGE_LAYOUT = ImageLayoutObservation(
+        image_observation_layers=_DEFAULT_IMAGE_OBSERVATION_LAYERS
+    )

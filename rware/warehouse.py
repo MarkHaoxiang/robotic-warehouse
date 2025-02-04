@@ -198,7 +198,6 @@ class Warehouse(gym.Env):
 
         # Make shelves and agents
         self.shelves = self.layout.reset_shelves()
-        assert len(self.shelves) >= self.request_queue_size + self.n_agents
         self.agents = self.layout.reset_agents(
             self.msg_bits, (self.np_random, self.n_agents)
         )
@@ -345,17 +344,7 @@ class Warehouse(gym.Env):
             # a shelf was successfully delived.
             shelf_delivered = True
             # remove from queue and replace it
-            candidates = [
-                s
-                for s in self.shelves
-                if (
-                    s not in self.request_queue
-                    and not (
-                        self._has_agent_at(s.pos)
-                        and self._get_agent_at(s.pos).carried_shelf
-                    )
-                )
-            ]
+            candidates = [s for s in self.shelves if (s not in self.request_queue)]
             new_request: Shelf = self.np_random.choice(candidates)
             self.request_queue[self.request_queue.index(shelf)] = new_request
             shelf.is_requested = False
