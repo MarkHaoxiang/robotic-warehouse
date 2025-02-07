@@ -32,16 +32,16 @@ class Layout:
 
     def validate(self):
         assert len(self.goals) >= 1, "At least one goal position must be provided."
-        assert (
-            self._highways.shape[0] == self.grid_size[0]
-        ), "Implicit grid_size:width from highways does not match grid_size."
-        assert (
-            self._highways.shape[1] == self.grid_size[1]
-        ), "Implicit grid_size:height from highways does not match grid_size."
+        assert self._highways.shape[0] == self.grid_size[0], (
+            "Implicit grid_size:width from highways does not match grid_size."
+        )
+        assert self._highways.shape[1] == self.grid_size[1], (
+            "Implicit grid_size:height from highways does not match grid_size."
+        )
         for goal in self.goals:
-            assert self.is_highway(
-                goal
-            ), f"A shelf cannot be placed onto a goal allocated position. Position {goal}"
+            assert self.is_highway(goal), (
+                f"A shelf cannot be placed onto a goal allocated position. Position {goal}"
+            )
 
     def is_highway(self, pos: Point) -> bool:
         return self.highways[*pos]
@@ -62,18 +62,18 @@ class Layout:
         self, msg_bits: int, params: tuple[np.random.Generator, int] | None = None
     ):
         if self._agents is None:
-            assert (
-                params is not None
-            ), "If agent positions are randomly generated, extra parameters."
+            assert params is not None, (
+                "If agent positions are randomly generated, extra parameters."
+            )
             rng, n_agents = params
             agent_locs = rng.choice(
                 np.arange(self.grid_size[0] * self.grid_size[1]),
                 size=n_agents,
                 replace=False,
             )
-            agent_locs = np.unravel_index(agent_locs, self.grid_size)
+            agent_locs = np.unravel_index(agent_locs, self.grid_size)  # type: ignore
             # And direction
-            agent_dirs = rng.choice([d for d in Direction], size=n_agents)
+            agent_dirs = rng.choice(Direction, size=n_agents)  # type: ignore
             agents = [
                 Agent(
                     i + 1, Point(x, y), dir_, msg_bits
@@ -105,8 +105,8 @@ class Layout:
         )
         column_height = column_height
         goals = [
-            (grid_size[0] // 2 - 1, grid_size[1] - 1),
-            (grid_size[0] // 2, grid_size[1] - 1),
+            Point(grid_size[0] // 2 - 1, grid_size[1] - 1),
+            Point(grid_size[0] // 2, grid_size[1] - 1),
         ]
 
         highways = np.zeros(grid_size, dtype=np.uint8)
@@ -140,7 +140,7 @@ class Layout:
         for line in lines:
             assert len(line) == grid_width, "Layout must be rectangular"
 
-        goals = []
+        goals: list[Point] = []
         grid_size = (grid_width, grid_height)
         highways = np.zeros(grid_size, dtype=np.uint8)
 
@@ -148,7 +148,7 @@ class Layout:
             for x, char in enumerate(line):
                 assert char.lower() in "gx."
                 if char.lower() == "g":
-                    goals.append((x, y))
+                    goals.append(Point(x, y))
                     highways[x, y] = 1
                 elif char.lower() == ".":
                     highways[x, y] = 1
@@ -176,16 +176,16 @@ class Layout:
         grid_size = (w, h)
 
         # Shelves
-        assert (
-            ImageLayer.SHELVES in image_layers
-        ), f"Requires SHELVES as a channel within image, but recieved {image_layers}"
+        assert ImageLayer.SHELVES in image_layers, (
+            f"Requires SHELVES as a channel within image, but recieved {image_layers}"
+        )
         shelves = image[image_layers.index(ImageLayer.SHELVES)]
         highways = 1 - shelves
 
         # Goals
-        assert (
-            ImageLayer.GOALS in image_layers
-        ), f"Requires GOALS as a channel within image, but recieved {image_layers}"
+        assert ImageLayer.GOALS in image_layers, (
+            f"Requires GOALS as a channel within image, but recieved {image_layers}"
+        )
         goal_layer = image[image_layers.index(ImageLayer.GOALS)]
         positions = np.argwhere(goal_layer)
         goals = [Point(*pos.tolist()) for pos in positions]
@@ -195,10 +195,12 @@ class Layout:
         if ImageLayer.AGENTS in image_layers:
             agent_layer = image[image_layers.index(ImageLayer.AGENTS)]
             positions = np.argwhere(agent_layer)
-            agents = [Point(*pos.tolist()) for pos in positions]
+            agent_positions = [Point(*pos.tolist()) for pos in positions]
             if ImageLayer.AGENT_DIRECTION in image_layers:
                 directions = image[image_layers.index(ImageLayer.AGENT_DIRECTION)]
-                agents = [(pos, Direction(directions[*pos] - 1)) for pos in agents]
+                agents = [
+                    (pos, Direction(directions[*pos] - 1)) for pos in agent_positions
+                ]
             else:
-                agents = [(pos, Direction.UP) for pos in agents]
+                agents = [(pos, Direction.UP) for pos in agent_positions]
         return Layout(grid_size, goals, highways, agents)

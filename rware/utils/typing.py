@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import NamedTuple
 from enum import Enum
 
@@ -30,6 +32,14 @@ class ImageLayer(Enum):
     ACCESSIBLE = 6
     # binary layer indicating locations where shelves can be placed (non-highway)
     STORAGE = 7
+
+    @staticmethod
+    def get_bounds(layer: ImageLayer) -> tuple[int, int]:
+        match layer:
+            case ImageLayer.AGENT_DIRECTION:
+                return (0, len(Direction))
+            case _:
+                return (0, 1)
 
 
 class Point(NamedTuple):

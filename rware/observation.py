@@ -259,6 +259,9 @@ class FlattenedObservation(Observation):
         return obs.vector
 
 
+IMG_DTYPE = np.uint8
+
+
 class ImageObservation(Observation):
     def __init__(self, directional: bool = True):
         super().__init__()
@@ -271,24 +274,15 @@ class ImageObservation(Observation):
         layers_min = []
         layers_max = []
         for layer in self.image_observation_layers:
-            if layer == ImageLayer.AGENT_DIRECTION:
-                # directions as int
-                layer_min = np.zeros(observation_shape, dtype=np.float32)
-                layer_max = np.ones(observation_shape, dtype=np.float32) * max(
-                    [d.value + 1 for d in Direction]
-                )
-            else:
-                # binary layer
-                layer_min = np.zeros(observation_shape, dtype=np.float32)
-                layer_max = np.ones(observation_shape, dtype=np.float32)
-            layers_min.append(layer_min)
-            layers_max.append(layer_max)
+            layer_min, layer_max = ImageLayer.get_bounds(layer)
+            layers_min.append(np.full(observation_shape, layer_min, dtype=IMG_DTYPE))
+            layers_max.append(np.full(observation_shape, layer_max, dtype=IMG_DTYPE))
 
         # total observation
         min_obs = np.stack(layers_min)
         max_obs = np.stack(layers_max)
         return _make_multiagent_space(
-            s.Box(min_obs, max_obs, dtype=np.float32), self.n_agents
+            s.Box(min_obs, max_obs, dtype=IMG_DTYPE), self.n_agents
         )
 
     def _prepare_obs(self, warehouse):
@@ -327,7 +321,7 @@ class ImageLayoutObservation(Observation):
         goals = np.zeros_like(shelves_locations)
         for goal in layout.goals:
             goals[*goal] = 1
-        return np.stack((shelves_locations, goals), axis=0, dtype=np.float32)
+        return np.stack((shelves_locations, goals), axis=0, dtype=np.int32)
 
     def _reset_space(self, warehouse: Warehouse):
         # Feature layers
@@ -355,22 +349,12 @@ class ImageLayoutObservation(Observation):
         layers_min = []
         layers_max = []
         for layer in self.image_observation_layers:
-            if layer == ImageLayer.AGENT_DIRECTION:
-                # directions as int
-                layer_min = np.zeros(size, dtype=np.float32)
-                layer_max = np.ones(size, dtype=np.float32) * max(
-                    [d.value + 1 for d in Direction]
-                )
-            else:
-                # binary layer
-                layer_min = np.zeros(size, dtype=np.float32)
-                layer_max = np.ones(size, dtype=np.float32)
-            layers_min.append(layer_min)
-            layers_max.append(layer_max)
+            layer_min, layer_max = ImageLayer.get_bounds(layer)
+            layers_min.append(np.full(size, layer_min, dtype=IMG_DTYPE))
+            layers_max.append(np.full(size, layer_max, dtype=IMG_DTYPE))
         min_obs = np.stack(layers_min)
         max_obs = np.stack(layers_max)
-
-        local_image_space = s.Box(min_obs, max_obs, dtype=np.float32)
+        local_image_space = s.Box(min_obs, max_obs, dtype=IMG_DTYPE)
 
         agent_space = s.Dict(
             {
@@ -378,19 +362,19 @@ class ImageLayoutObservation(Observation):
                 "global_image": s.Box(
                     low=np.array(
                         [
-                            np.zeros(warehouse.grid_size, dtype=np.float32),
-                            np.zeros(warehouse.grid_size, dtype=np.float32),
-                            np.zeros(warehouse.grid_size, dtype=np.float32),
+                            np.zeros(warehouse.grid_size),
+                            np.zeros(warehouse.grid_size),
+                            np.zeros(warehouse.grid_size),
                         ]
                     ),
                     high=np.array(
                         [
-                            np.ones(warehouse.grid_size, dtype=np.float32),
-                            np.ones(warehouse.grid_size, dtype=np.float32),
-                            np.ones(warehouse.grid_size, dtype=np.float32),
+                            np.ones(warehouse.grid_size),
+                            np.ones(warehouse.grid_size),
+                            np.ones(warehouse.grid_size),
                         ]
                     ),
-                    dtype=np.float32,
+                    dtype=np.int32,
                 ),
                 "features": feature_space,
             }
@@ -415,9 +399,9 @@ class ImageLayoutObservation(Observation):
         start_y = max(0, agent.pos.y - self.sensor_range)
         end_y = agent.pos.y + self.sensor_range + 1
 
-        mask = np.zeros(warehouse.grid_size)[np.newaxis, :, :]
-        mask[:, start_x:end_x, start_y:end_y] = 1.0
-        global_image = np.concat((self.layout_image, mask), axis=0, dtype=np.float32)
+        mask = np.zeros(warehouse.grid_size, dtype=np.int32)[np.newaxis, :, :]
+        mask[:, start_x:end_x, start_y:end_y] = 1
+        global_image = np.concat((self.layout_image, mask), axis=0, dtype=np.int32)
 
         # Local
         sensor_pad = [
@@ -565,37 +549,37 @@ def make_global_image(
     for layer_type in image_layers:
         match layer_type:
             case ImageLayer.SHELVES:
-                layer = warehouse.grid[_LAYER_SHELVES].copy().astype(np.float32)
+                layer = warehouse.grid[_LAYER_SHELVES].copy().astype(IMG_DTYPE)
                 # set all occupied shelf cells to 1.0 (instead of shelf ID)
                 layer[layer > 0.0] = 1.0
             case ImageLayer.REQUESTS:
-                layer = np.zeros(warehouse.grid_size, dtype=np.float32)
+                layer = np.zeros(warehouse.grid_size, dtype=IMG_DTYPE)
                 for requested_shelf in warehouse.request_queue:
                     layer[*requested_shelf.pos] = 1.0
             case ImageLayer.AGENTS:
-                layer = warehouse.grid[_LAYER_AGENTS].copy().astype(np.float32)
+                layer = warehouse.grid[_LAYER_AGENTS].copy().astype(IMG_DTYPE)
                 # set all occupied agent cells to 1.0 (instead of agent ID)
-                layer[layer > 0.0] = 1.0
+                layer[layer > 0] = 1
             case ImageLayer.AGENT_DIRECTION:
-                layer = np.zeros(warehouse.grid_size, dtype=np.float32)
+                layer = np.zeros(warehouse.grid_size, dtype=IMG_DTYPE)
                 for ag in warehouse.agents:
                     agent_direction = ag.dir.value + 1
-                    layer[*ag.pos] = float(agent_direction)
+                    layer[*ag.pos] = agent_direction
             case ImageLayer.AGENT_LOAD:
-                layer = np.zeros(warehouse.grid_size, dtype=np.float32)
+                layer = np.zeros(warehouse.grid_size, dtype=IMG_DTYPE)
                 for ag in warehouse.agents:
                     if ag.carried_shelf is not None:
-                        layer[*ag.pos] = 1.0
+                        layer[*ag.pos] = 1
             case ImageLayer.GOALS:
-                layer = np.zeros(warehouse.grid_size, dtype=np.float32)
+                layer = np.zeros(warehouse.grid_size, dtype=IMG_DTYPE)
                 for goal in warehouse.goals:
-                    layer[*goal] = 1.0
+                    layer[*goal] = 1
             case ImageLayer.ACCESSIBLE:
-                layer = np.ones(warehouse.grid_size, dtype=np.float32)
+                layer = np.ones(warehouse.grid_size, dtype=IMG_DTYPE)
                 for ag in warehouse.agents:
-                    layer[*ag.pos] = 0.0
+                    layer[*ag.pos] = 0
             case ImageLayer.STORAGE:
-                layer = 1 - warehouse.layout.highways.copy()
+                layer = 1 - warehouse.layout.highways.copy().astype(IMG_DTYPE)
             case _:
                 raise ValueError(f"Unknown image layer type: {layer_type}")
         # pad with 0s for out-of-map cells
@@ -639,7 +623,7 @@ class ObservationRegistry:
     DICT = DictObservation(normalised_coordinates=False)
     FLATTENED = FlattenedObservation(normalised_coordinates=False)
     IMAGE = ImageObservation(directional=True)
-    IMAGE_DICT = ImageDictObservation()
+    IMAGE_DICT = ImageDictObservation(directional=True)
     IMAGE_LAYOUT = ImageLayoutObservation(
-        image_observation_layers=_DEFAULT_IMAGE_OBSERVATION_LAYERS
+        image_observation_layers=_DEFAULT_IMAGE_OBSERVATION_LAYERS, directional=True
     )

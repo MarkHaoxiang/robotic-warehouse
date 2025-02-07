@@ -64,7 +64,7 @@ class InteractiveRWAREEnv:
             observation_type=ObservationRegistry.IMAGE_LAYOUT,
             render_mode="human",
         )
-        self.n_agents = self.env.unwrapped.n_agents
+        self.n_agents = self.env.unwrapped.n_agents  # type: ignore
         self.running = True
         self.current_agent_index = 0
         self.current_action = None
@@ -77,7 +77,7 @@ class InteractiveRWAREEnv:
 
         obss, _ = self.env.reset()
         self.env.render()
-        self.env.unwrapped.renderer.window.on_key_press = self._key_press
+        self.env.unwrapped.renderer.window.on_key_press = self._key_press  # type: ignore
 
         if self.display_info:
             self._display_info(obss, [0] * self.n_agents, False)
