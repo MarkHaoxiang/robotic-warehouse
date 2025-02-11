@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 import numpy as np
 import gymnasium.spaces as s
@@ -51,7 +51,7 @@ class Observation(ABC):
     def _reset_space(self, warehouse: Warehouse) -> Space:
         return NotImplementedError()
 
-    def make_obs(self, warehouse: Warehouse):
+    def make_obs(self, warehouse: Warehouse) -> tuple[Any, ...]:
         self._prepare_obs(warehouse)
         return tuple(
             [self._make_agent_obs(agent, warehouse) for agent in warehouse.agents]

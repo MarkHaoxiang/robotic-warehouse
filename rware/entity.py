@@ -72,6 +72,11 @@ class Agent(Entity):
         self.loaded = False
 
     @property
+    def carried_shelf_exn(self):
+        assert self.carried_shelf is not None, f"No shelf carried by agent {self.id}"
+        return self.carried_shelf
+
+    @property
     def collision_layers(self):
         if self.loaded:
             return (_LAYER_AGENTS, _LAYER_SHELVES)

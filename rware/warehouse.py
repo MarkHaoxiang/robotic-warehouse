@@ -218,7 +218,9 @@ class Warehouse(gym.Env):
 
         self.request_queue = list(
             self.np_random.choice(
-                self.shelves, size=self.request_queue_size, replace=False
+                self.shelves,  # type: ignore
+                size=self.request_queue_size,
+                replace=False,
             )
         )
         for shelf in self.request_queue:
@@ -232,8 +234,10 @@ class Warehouse(gym.Env):
 
     def step(  # type: ignore
         self, actions: list[AgentAction]
-    ) -> tuple[list[np.ndarray], list[float], bool, bool, dict]:
-        assert len(actions) == len(self.agents)
+    ) -> tuple[tuple[Any, ...], list[float], bool, bool, dict]:
+        assert len(actions) == self.n_agents, (
+            f"Number of actions {len(actions)} does not match number of agents {self.n_agents}"
+        )
 
         for agent, action in zip(self.agents, actions):
             if self.msg_bits > 0:
@@ -328,9 +332,9 @@ class Warehouse(gym.Env):
                 events.append(
                     event.PickupShelf(
                         agent.id,
-                        agent.carried_shelf.id,
+                        agent.carried_shelf_exn.id,
                         agent.pos,
-                        agent.carried_shelf.is_requested,
+                        agent.carried_shelf_exn.is_requested,
                     )
                 )
             elif agent.req_action == AgentAction.TOGGLE_LOAD and agent.carried_shelf:
@@ -360,7 +364,7 @@ class Warehouse(gym.Env):
             shelf_delivered = True
             # remove from queue and replace it
             candidates = [s for s in self.shelves if (s not in self.request_queue)]
-            new_request: Shelf = self.np_random.choice(candidates)
+            new_request: Shelf = self.np_random.choice(candidates)  # type: ignore
             self.request_queue[self.request_queue.index(shelf)] = new_request
             shelf.is_requested = False
             new_request.is_requested = True
@@ -456,13 +460,11 @@ class Warehouse(gym.Env):
         """
         if recompute or self.global_image is None:
             layers = make_global_image(self, image_layers, None)
-            self.global_image = np.stack(layers)
+            global_image = np.stack(layers)
             if pad_to_shape is not None:
                 padding_dims = [
                     pad_dim - global_dim
-                    for pad_dim, global_dim in zip(
-                        pad_to_shape, self.global_image.shape
-                    )
+                    for pad_dim, global_dim in zip(pad_to_shape, global_image.shape)
                 ]
                 assert all([dim >= 0 for dim in padding_dims])
                 pad_before = [pad_dim // 2 for pad_dim in padding_dims]
@@ -470,10 +472,14 @@ class Warehouse(gym.Env):
                     pad_dim // 2 if pad_dim % 2 == 0 else pad_dim // 2 + 1
                     for pad_dim in padding_dims
                 ]
-                self.global_image = np.pad(
-                    self.global_image,
+                global_image = np.pad(
+                    global_image,
                     pad_width=tuple(zip(pad_before, pad_after)),
                     mode="constant",
                     constant_values=0,
                 )
+
+            self.global_image = global_image
+
+        assert self.global_image is not None
         return self.global_image
