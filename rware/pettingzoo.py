@@ -1,5 +1,4 @@
 from typing import Dict, Tuple, List, Optional
-import warnings
 
 import gymnasium as gym
 import numpy as np
@@ -25,24 +24,27 @@ class PettingZooWrapper(ParallelEnv):
     def __init__(self, env: Warehouse):
         super().__init__()
         self._env = env
-        self.agents = self.possible_agents = []
+        self.agents: List[AgentID] = []
+        self.possible_agents: List[AgentID] = []
         self.observation_spaces = self.action_spaces = {}
 
     def reset(self, seed: Optional[int] = None, options: Optional[Dict] = None):
         obs, info = self._env.reset(seed, options)
         obs = to_agentid_dict(obs)
-        info = {str(i + 1): {} for i in range(self._env.n_agents)}
         # Reset agents and spaces
-        self.agents = [str(agent.id) for agent in self._env.agents]
-        self.possible_agents = self.agents
+        self.agents = self.possible_agents = [
+            str(agent.id) for agent in self._env.agents
+        ]
         self.observation_spaces = {
-            agent_id: self.observation_space(agent_id)
-            for agent_id in [str(i + 1) for i in range(self._env.n_agents)]
+            agent_id: self.observation_space(agent_id) for agent_id in self.agents
         }
         self.action_spaces = {
-            agent_id: self.action_space(agent_id)
-            for agent_id in [str(i + 1) for i in range(self._env.n_agents)]
+            agent_id: self.action_space(agent_id) for agent_id in self.agents
         }
+
+        for agent_id in self.agents:
+            info[agent_id] = info[int(agent_id)]
+
         return obs, info
 
     def step(
@@ -72,11 +74,9 @@ class PettingZooWrapper(ParallelEnv):
             self.agents = []  # PettingZoo requires agents to be removed
         terminated = to_agentid_dict([terminated for _ in range(self._env.n_agents)])
         truncated = to_agentid_dict([truncated for _ in range(self._env.n_agents)])
-        if len(info) != 0:
-            warnings.warn(
-                "Error: expected info dict to be empty. PettingZooWrapper is likely out of date."
-            )
-        info = {str(i + 1): {} for i in range(self._env.n_agents)}
+
+        for agent_id in self.agents:
+            info[agent_id] = info[int(agent_id)]
 
         return obs, rewards, terminated, truncated, info
 

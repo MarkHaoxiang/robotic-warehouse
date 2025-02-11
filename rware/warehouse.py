@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from enum import Enum
 import warnings
 
 import gymnasium as gym
@@ -23,6 +24,11 @@ from rware.entity import (
 from rware.observation import Observation, ObservationRegistry, make_global_image
 import rware.reward as event
 from rware.reward import Reward, RewardRegistry
+
+
+class Info(Enum):
+    # Counter of shelves delivered within the episode
+    DELIVERED_SHELVES = 0
 
 
 class Warehouse(gym.Env):
@@ -52,6 +58,7 @@ class Warehouse(gym.Env):
             ImageLayer.GOALS,
             ImageLayer.ACCESSIBLE,
         ],
+        return_info: list[Info] = [Info.DELIVERED_SHELVES],
         render_mode: str | None = "rgb_array",
     ):
         """The robotic warehouse environment
@@ -163,11 +170,16 @@ class Warehouse(gym.Env):
         self.renderer = None
         self.render_mode = render_mode
 
+        self.return_info = return_info
+
         self.reset()
 
     def _get_info(self):
-        # TODO: Counter of delivered shelves?
-        return {}
+        info = {agent.id: {} for agent in self.agents}
+        if Info.DELIVERED_SHELVES in self.return_info:
+            for agent in self.agents:
+                info[agent.id]["delivered_shelves"] = self._delivered_shelves[agent.id]
+        return info
 
     def _recalc_grid(self):
         self.grid[:] = 0
@@ -213,6 +225,9 @@ class Warehouse(gym.Env):
             shelf.is_requested = True
 
         self.reward_type.reset(self.n_agents, self.layout)
+
+        self._delivered_shelves = {agent.id: 0 for agent in self.agents}
+
         return self.obs_generator.make_obs(self), self._get_info()
 
     def step(  # type: ignore
@@ -350,10 +365,11 @@ class Warehouse(gym.Env):
             shelf.is_requested = False
             new_request.is_requested = True
             # also reward the agents
-            agent = self._get_agent_at(goal)
-            assert agent is not None
+            agent = self._get_agent_at_exn(goal)
             agent.has_delivered = True
             events.append(event.DeliveredRequest(agent.id, shelf.id, goal))
+
+            self._delivered_shelves[agent.id] = self._delivered_shelves[agent.id] + 1
 
         if shelf_delivered:
             self._cur_inactive_steps = 0
@@ -396,19 +412,29 @@ class Warehouse(gym.Env):
         if seed is not None:
             self._np_random, seed = seeding.np_random(seed)
 
+    def _has_shelf_at(self, pos: Point) -> bool:
+        return self._get_shelf_at(pos) is not None
+
     def _get_shelf_at(self, pos: Point) -> Shelf | None:
         shelf_id = self.grid[_LAYER_SHELVES, *pos]
         return self.shelves[shelf_id - 1] if shelf_id else None
 
-    def _has_shelf_at(self, pos: Point) -> bool:
-        return self._get_shelf_at(pos) is not None
+    def _get_shelf_at_exn(self, pos: Point) -> Shelf:
+        shelf = self._get_shelf_at(pos)
+        assert shelf is not None
+        return shelf
+
+    def _has_agent_at(self, pos: Point) -> bool:
+        return self._get_agent_at(pos) is not None
 
     def _get_agent_at(self, pos: Point) -> Agent | None:
         agent_id = self.grid[_LAYER_AGENTS, *pos]
         return self.agents[agent_id - 1] if agent_id else None
 
-    def _has_agent_at(self, pos: Point) -> bool:
-        return self._get_agent_at(pos) is not None
+    def _get_agent_at_exn(self, pos: Point) -> Agent:
+        agent = self._get_agent_at(pos)
+        assert agent is not None
+        return agent
 
     def get_global_image(
         self,
