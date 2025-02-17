@@ -139,9 +139,9 @@ class Warehouse(gym.Env):
                 )
                 n_agents = n
 
+        self.n_agents = n_agents
         self._update_layout(self.layout)
 
-        self.n_agents = n_agents
         self.msg_bits = msg_bits
         self.sensor_range = sensor_range
         self.max_inactivity_steps = max_inactivity_steps
@@ -162,7 +162,7 @@ class Warehouse(gym.Env):
         self.agents: list[Agent] = []
 
         # Compute Observation spaces
-        self.image_observation_layers = image_observation_layers
+        self.default_global_image_layers = image_observation_layers
         self.obs_generator = observation_type.from_warehouse(self)
         self.observation_space = self.obs_generator.space
 
@@ -193,6 +193,7 @@ class Warehouse(gym.Env):
         layout.validate()
         self.layout = layout
         self.grid_size = self.layout.grid_size
+
         self.grid = self.layout.generate_grid()
         self.goals = self.layout.goals
 
@@ -210,9 +211,14 @@ class Warehouse(gym.Env):
 
         # Make shelves and agents
         self.shelves = self.layout.reset_shelves()
-        self.agents = self.layout.reset_agents(
+        new_agents = self.layout.reset_agents(
             self.msg_bits, (self.np_random, self.n_agents)
         )
+        if len(new_agents) != self.n_agents:
+            raise NotImplementedError(
+                "Changing the number of agents on reset is not yet supported."
+            )
+        self.agents = new_agents
 
         self._recalc_grid()
 
@@ -442,10 +448,7 @@ class Warehouse(gym.Env):
 
     def get_global_image(
         self,
-        image_layers=[
-            ImageLayer.SHELVES,
-            ImageLayer.GOALS,
-        ],
+        image_layers: list[ImageLayer] | None = None,
         recompute=False,
         pad_to_shape=None,
     ) -> np.ndarray:
@@ -458,6 +461,9 @@ class Warehouse(gym.Env):
          :param pad_to_shape: if given than pad environment global image shape into this
              shape (if doesn't fit throw exception)
         """
+        if image_layers is None:
+            image_layers = self.default_global_image_layers
+
         if recompute or self.global_image is None:
             layers = make_global_image(self, image_layers, None)
             global_image = np.stack(layers)

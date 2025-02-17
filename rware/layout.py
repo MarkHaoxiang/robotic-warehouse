@@ -63,7 +63,7 @@ class Layout:
     ):
         if self._agents is None:
             assert params is not None, (
-                "If agent positions are randomly generated, extra parameters."
+                "If agent positions are randomly generated, extra parameter are required."
             )
             rng, n_agents = params
             agent_locs = rng.choice(

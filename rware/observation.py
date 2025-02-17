@@ -268,7 +268,7 @@ class ImageObservation(Observation):
         self.directional = directional
 
     def _reset_space(self, warehouse: Warehouse):
-        self.image_observation_layers = warehouse.image_observation_layers
+        self.image_observation_layers = warehouse.default_global_image_layers
         observation_shape = (1 + 2 * self.sensor_range, 1 + 2 * self.sensor_range)
 
         layers_min = []
