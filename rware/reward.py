@@ -98,23 +98,7 @@ class Shaped(Reward):
         super().reset(n_agents, layout)
         self.distance_from_goal = np.ones_like(layout.highways) * np.inf
 
-        G = nx.Graph()
-
-        for x in range(layout.grid_size[0]):
-            for y in range(layout.grid_size[1]):
-                p = Point(x, y)
-                G.add_node(p)
-                if layout.is_highway(p):
-                    # Add edges in the four cardinal directions
-                    if x > 0:
-                        G.add_edge(p, Point(x - 1, y))
-                    if x < layout.grid_size[0] - 1:
-                        G.add_edge(p, Point(x + 1, y))
-                    if y > 0:
-                        G.add_edge(p, Point(x, y - 1))
-                    if y < layout.grid_size[1] - 1:
-                        G.add_edge(p, Point(x, y + 1))
-
+        G = layout.highway_traversal_graph
         for goal in layout.goals:
             paths = nx.single_source_shortest_path(G=G, source=goal)
             for target, path in paths.items():

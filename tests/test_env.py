@@ -266,7 +266,7 @@ def test_action_space_3():
         ObservationRegistry.FLATTENED,
         ObservationRegistry.IMAGE,
         ObservationRegistry.IMAGE_DICT,
-        ObservationRegistry.IMAGE_LAYOUT,
+        ObservationRegistry.SHAPED,
     ],
 )
 def test_obs_space_contains(observation_type: ObservationRegistry):

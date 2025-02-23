@@ -1,6 +1,8 @@
 from __future__ import annotations
+from functools import cached_property
 
 import numpy as np
+import networkx as nx
 
 from rware.entity import Agent, Shelf
 from rware.utils.typing import Point, Direction, ImageLayer
@@ -91,6 +93,25 @@ class Layout:
     def generate_grid(self) -> np.ndarray:
         """Generates an empty grid"""
         return np.zeros((_COLLISION_LAYERS, *self.grid_size), dtype=np.int32)
+
+    @cached_property
+    def highway_traversal_graph(self) -> nx.Graph:
+        G = nx.Graph()
+        for x in range(self.grid_size[0]):
+            for y in range(self.grid_size[1]):
+                p = Point(x, y)
+                G.add_node(p)
+                if self.is_highway(p):
+                    # Add edges in the four cardinal directions
+                    if x > 0:
+                        G.add_edge(p, Point(x - 1, y))
+                    if x < self.grid_size[0] - 1:
+                        G.add_edge(p, Point(x + 1, y))
+                    if y > 0:
+                        G.add_edge(p, Point(x, y - 1))
+                    if y < self.grid_size[1] - 1:
+                        G.add_edge(p, Point(x, y + 1))
+        return G
 
     @property
     def highways(self) -> np.ndarray:
@@ -204,3 +225,7 @@ class Layout:
             else:
                 agents = [(pos, Direction.UP) for pos in agent_positions]
         return Layout(grid_size, goals, highways, agents)
+
+    @property
+    def n_goals(self):
+        return len(self.goals)

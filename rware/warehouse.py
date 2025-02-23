@@ -201,6 +201,7 @@ class Warehouse(gym.Env):
         if seed is not None:
             super().reset(seed=seed, options=options)
 
+        self.global_image = None
         self._cur_inactive_steps = 0
         self._cur_steps = 0
 
@@ -244,6 +245,7 @@ class Warehouse(gym.Env):
         assert len(actions) == self.n_agents, (
             f"Number of actions {len(actions)} does not match number of agents {self.n_agents}"
         )
+        self.global_image = None
 
         for agent, action in zip(self.agents, actions):
             if self.msg_bits > 0:

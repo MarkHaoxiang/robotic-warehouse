@@ -4,13 +4,14 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from typing import Any, TYPE_CHECKING
 
+import networkx as nx
 import numpy as np
 import gymnasium.spaces as s
 from gymnasium.spaces import Space
 
 from rware.entity import Agent, _LAYER_AGENTS, _LAYER_SHELVES
 from rware.layout import Layout
-from rware.utils.typing import Direction, ImageLayer
+from rware.utils.typing import Direction, ImageLayer, Point
 
 if TYPE_CHECKING:
     # TODO markli: Really, we want to decouple this circular dependency by creating a WarehouseState class
@@ -306,7 +307,7 @@ class ImageObservation(Observation):
         return obs
 
 
-class ImageLayoutObservation(Observation):
+class ShapedObservation(Observation):
     """When the global layout is known to all agents."""
 
     def __init__(
@@ -325,24 +326,25 @@ class ImageLayoutObservation(Observation):
 
     def _reset_space(self, warehouse: Warehouse):
         # Feature layers
-        feature_space_dict = s.Dict(
+        self.feature_space_dict = s.Dict(
             OrderedDict(
                 {
                     "direction": s.Discrete(4),
                     "carrying_shelf": s.MultiBinary(1),
                     "on_highway": s.MultiBinary(1),
                     "on_shelf_requested": s.MultiBinary(1),
+                    "closest_goal": s.Box(-1, 1, shape=(2,)),
+                    "closest_uncollected_request": s.Box(-1, 1, shape=(2,)),
+                    "closest_available_storage": s.Box(-1, 1, shape=(2,)),
                 }
             )
         )
-        feature_flat_dim = s.flatdim(feature_space_dict)
-        feature_space = (
-            s.Box(  # TODO: We should adapt this function to have correct low and high.
-                low=-float("inf"),
-                high=float("inf"),
-                shape=(feature_flat_dim,),
-                dtype=np.float32,
-            )
+        feature_flat_dim = s.flatdim(self.feature_space_dict)
+        feature_space = s.Box(
+            low=-float("inf"),
+            high=float("inf"),
+            shape=(feature_flat_dim,),
+            dtype=np.float32,
         )
 
         size = (1 + 2 * self.sensor_range, 1 + 2 * self.sensor_range)
@@ -359,51 +361,21 @@ class ImageLayoutObservation(Observation):
         agent_space = s.Dict(
             {
                 "local_image": local_image_space,
-                "global_image": s.Box(
-                    low=np.array(
-                        [
-                            np.zeros(warehouse.grid_size),
-                            np.zeros(warehouse.grid_size),
-                            np.zeros(warehouse.grid_size),
-                        ]
-                    ),
-                    high=np.array(
-                        [
-                            np.ones(warehouse.grid_size),
-                            np.ones(warehouse.grid_size),
-                            np.ones(warehouse.grid_size),
-                        ]
-                    ),
-                    dtype=np.int32,
-                ),
                 "features": feature_space,
+                "position": s.Box(0, max(warehouse.grid_size) - 1, (2,)),
             }
         )
         return _make_multiagent_space(agent_space, self.n_agents)
 
     def _prepare_obs(self, warehouse):
-        self.layout_image = self._make_layout_obs(warehouse.layout)
-        layers = make_global_image(
-            warehouse,
-            image_layers=self.image_observation_layers,
+        self.world_image = np.stack(
+            make_global_image(
+                warehouse,
+                image_layers=self.image_observation_layers,
+            )
         )
-        self.global_layers = np.stack(layers)
 
     def _make_agent_obs(self, agent: Agent, warehouse: Warehouse):
-        # Global information was generated --> get information for agent
-        image = self.global_layers.copy()
-
-        # Global
-        start_x = max(0, agent.pos.x - self.sensor_range)
-        end_x = agent.pos.x + self.sensor_range + 1
-        start_y = max(0, agent.pos.y - self.sensor_range)
-        end_y = agent.pos.y + self.sensor_range + 1
-
-        mask = np.zeros(warehouse.grid_size, dtype=np.int32)[np.newaxis, :, :]
-        mask[:, start_x:end_x, start_y:end_y] = 1
-        global_image = np.concat((self.layout_image, mask), axis=0, dtype=np.int32)
-
-        # Local
         sensor_pad = [
             (0, 0),
             (warehouse.sensor_range, warehouse.sensor_range),
@@ -413,40 +385,96 @@ class ImageLayoutObservation(Observation):
         end_x = agent.pos.x + 2 * self.sensor_range + 1
         start_y = agent.pos.y
         end_y = agent.pos.y + 2 * self.sensor_range + 1
-        image = np.pad(image, sensor_pad, mode="constant")
+        image = np.pad(self.world_image, sensor_pad, mode="constant")
 
         local_image = image[:, start_x:end_x, start_y:end_y]
 
         if self.directional:
             local_image = _rotate_obs(local_image, agent.dir)
 
-        # mask = np.zeros_like(image)
-        # image = image * mask
-        # image = np.concat((self.layout_image, image), axis=0)
-
         # Make feature obs
+        # Direction
         feature_obs = _VectorWriter(self.space[agent.id - 1]["features"].shape[0])
         direction = np.zeros(4)
         direction[agent.dir.value] = 1.0
         feature_obs.write(direction)
+        # Carrying Shelf
         feature_obs.write(
             [
                 int(agent.carried_shelf is not None),
             ]
         )
+        # On highway
         feature_obs.write([int(warehouse.layout.is_highway(agent.pos))])
         is_requested = [0]
+        # Shelf requested
         if (
             warehouse._has_shelf_at(agent.pos)
-            and warehouse._get_shelf_at(agent.pos).is_requested
+            and warehouse._get_shelf_at_exn(agent.pos).is_requested
         ):
             is_requested[0] = 1
         feature_obs.write(is_requested)
 
+        # Closest
+        # Construct the traversability graph (approximate)
+        if agent.carried_shelf:
+            G = warehouse.layout.highway_traversal_graph
+
+            # Agents can only travel on highways
+            def distance_to(target: Point):
+                try:
+                    path = nx.shortest_path(G, agent.pos, target)
+                    return len(path)
+                except nx.NetworkXNoPath:
+                    return len(G.nodes) + Point.manhattan_distance(agent.pos, target)
+        else:
+            # Agent can cross over shelves
+            def distance_to(target: Point):
+                return Point.manhattan_distance(agent.pos, target)
+
+        closest_goal = min(warehouse.layout.goals, key=distance_to)
+        closest_goal = Point(closest_goal.x - agent.pos.x, closest_goal.y - agent.pos.y)
+        carried_shelves = [a.carried_shelf for a in warehouse.agents]
+        uncollected_requests = [
+            s.pos
+            for s in warehouse.request_queue
+            if s.is_requested and s not in carried_shelves
+        ]
+        if len(uncollected_requests) > 0:
+            closest_uncollected_request = min(uncollected_requests, key=distance_to)
+        else:
+            closest_uncollected_request = agent.pos
+        closest_uncollected_request = Point(
+            closest_uncollected_request.x - agent.pos.x,
+            closest_uncollected_request.y - agent.pos.y,
+        )
+        available_storage = [
+            Point(x, y)
+            for x in range(warehouse.layout.grid_size[0])
+            for y in range(warehouse.layout.grid_size[1])
+        ]
+        available_storage = [
+            p
+            for p in available_storage
+            if not warehouse._has_shelf_at(p) and not warehouse.layout.is_highway(p)
+        ]
+        if len(available_storage) > 0:
+            closest_available_storage = min(available_storage, key=distance_to)
+        else:
+            closest_available_storage = agent.pos
+        closest_available_storage = Point(
+            closest_available_storage.x - agent.pos.x,
+            closest_available_storage.y - agent.pos.y,
+        )
+
+        feature_obs.write(closest_goal.normalise(*warehouse.grid_size))
+        feature_obs.write(closest_uncollected_request.normalise(*warehouse.grid_size))
+        feature_obs.write(closest_available_storage.normalise(*warehouse.grid_size))
+
         return {
             "local_image": local_image,
-            "global_image": global_image,
             "features": feature_obs.vector,
+            "position": np.array(agent.pos, dtype=np.float32),
         }
 
 
@@ -624,6 +652,6 @@ class ObservationRegistry:
     FLATTENED = FlattenedObservation(normalised_coordinates=False)
     IMAGE = ImageObservation(directional=True)
     IMAGE_DICT = ImageDictObservation(directional=True)
-    IMAGE_LAYOUT = ImageLayoutObservation(
+    SHAPED = ShapedObservation(
         image_observation_layers=_DEFAULT_IMAGE_OBSERVATION_LAYERS, directional=True
     )

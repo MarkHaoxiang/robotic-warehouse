@@ -48,3 +48,7 @@ class Point(NamedTuple):
 
     def normalise(self, grid_width: int, grid_height: int) -> tuple[float, float]:
         return (self.x / (grid_width - 1), self.y / (grid_height - 1))
+
+    @staticmethod
+    def manhattan_distance(a: Point, b: Point) -> int:
+        return abs(a.x - b.x) + abs(a.y - b.y)

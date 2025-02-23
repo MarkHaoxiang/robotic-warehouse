@@ -61,7 +61,7 @@ class InteractiveRWAREEnv:
             column_height=8,
             shelf_rows=1,
             reward_type=RewardRegistry.SHAPED,
-            observation_type=ObservationRegistry.IMAGE_LAYOUT,
+            observation_type=ObservationRegistry.SHAPED,
             render_mode="human",
         )
         self.n_agents = self.env.unwrapped.n_agents  # type: ignore
