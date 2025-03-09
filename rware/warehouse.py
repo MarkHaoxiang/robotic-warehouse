@@ -240,7 +240,7 @@ class Warehouse(gym.Env):
         return self.obs_generator.make_obs(self), self._get_info()
 
     def step(  # type: ignore
-        self, actions: list[AgentAction]
+        self, actions: list[np.ndarray]
     ) -> tuple[tuple[Any, ...], list[float], bool, bool, dict]:
         assert len(actions) == self.n_agents, (
             f"Number of actions {len(actions)} does not match number of agents {self.n_agents}"
@@ -325,6 +325,7 @@ class Warehouse(gym.Env):
                             agent.prev_pos,
                             agent.pos,
                             agent.carried_shelf.is_requested,
+                            agent.carried_shelf.color,
                         )
                     )
             elif agent.req_action in [AgentAction.LEFT, AgentAction.RIGHT]:
@@ -343,6 +344,7 @@ class Warehouse(gym.Env):
                         agent.carried_shelf_exn.id,
                         agent.pos,
                         agent.carried_shelf_exn.is_requested,
+                        agent.carried_shelf_exn.color,
                     )
                 )
             elif agent.req_action == AgentAction.TOGGLE_LOAD and agent.carried_shelf:
@@ -357,6 +359,7 @@ class Warehouse(gym.Env):
                             agent.carried_shelf.is_requested,
                         )
                     )
+                    agent.carried_shelf.color = self.layout.get_color_exn(agent.pos)
                     agent.carried_shelf = None
                     agent.has_delivered = False
 
@@ -364,10 +367,11 @@ class Warehouse(gym.Env):
 
         shelf_delivered = False
         for goal in self.goals:
-            shelf = self._get_shelf_at(goal)
+            shelf = self._get_shelf_at(goal.pos)
 
-            if shelf is None or not shelf.is_requested:
+            if shelf is None or not shelf.is_requested or shelf.color != goal.color:
                 continue
+
             # a shelf was successfully delived.
             shelf_delivered = True
             # remove from queue and replace it
@@ -377,9 +381,9 @@ class Warehouse(gym.Env):
             shelf.is_requested = False
             new_request.is_requested = True
             # also reward the agents
-            agent = self._get_agent_at_exn(goal)
+            agent = self._get_agent_at_exn(goal.pos)
             agent.has_delivered = True
-            events.append(event.DeliveredRequest(agent.id, shelf.id, goal))
+            events.append(event.DeliveredRequest(agent.id, shelf.id, goal.pos))
 
             self._delivered_shelves[agent.id] = self._delivered_shelves[agent.id] + 1
 

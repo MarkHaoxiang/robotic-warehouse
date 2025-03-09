@@ -110,10 +110,17 @@ class Agent(Entity):
 
 
 class Shelf(Entity):
-    def __init__(self, id_: ID, pos: Point):
+    def __init__(self, id_: ID, pos: Point, color: int):
         super().__init__(id_, pos)
         self.is_requested = False
+        self.color = color
 
     @property
     def collision_layers(self):
         return (_LAYER_SHELVES,)
+
+
+class Goal(Entity):
+    def __init__(self, id_: ID, pos: Point, color: int = 0):
+        super().__init__(id_, pos)
+        self.color = color

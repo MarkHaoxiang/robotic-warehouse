@@ -22,6 +22,7 @@ class PickupShelf:
     shelf_id: ID
     loc: Point
     is_requested: bool
+    color: int
 
 
 @dataclass
@@ -40,6 +41,7 @@ class MoveShelf:
     start: Point
     end: Point
     is_requested: bool
+    color: int
 
 
 # Immutable descriptions of things that have happened
@@ -96,14 +98,14 @@ class Shaped(Reward):
 
     def reset(self, n_agents, layout):
         super().reset(n_agents, layout)
-        self.distance_from_goal = np.ones_like(layout.highways) * np.inf
+        self.distance_from_goal = np.ones_like(layout.storage) * np.inf
 
         G = layout.highway_traversal_graph
         for goal in layout.goals:
-            paths = nx.single_source_shortest_path(G=G, source=goal)
+            paths = nx.single_source_shortest_path(G=G, source=goal.pos)
             for target, path in paths.items():
-                self.distance_from_goal[*target] = min(
-                    self.distance_from_goal[*target], len(path) - 1
+                self.distance_from_goal[goal.color, *target] = min(
+                    self.distance_from_goal[goal.color, *target], len(path) - 1
                 )
 
         maximum_distance = np.max(
@@ -142,17 +144,15 @@ class Shaped(Reward):
             if event.is_requested:
                 rewards[event.agent_id - 1] += 0.25
                 self.shelf_initial_potential[event.shelf_id] = self.potential_from_goal[
-                    *event.loc
+                    event.color, *event.loc
                 ]
             else:
                 rewards[event.agent_id - 1] -= self.BAD_PICKUP_PENALTY
         elif isinstance(event, MoveShelf) and event.is_requested:
-            i_pot = self.potential_from_goal[*event.start]
-            e_pot = self.potential_from_goal[*event.end]
+            i_pot = self.potential_from_goal[event.color, *event.start]
+            e_pot = self.potential_from_goal[event.color, *event.end]
             r = e_pot - i_pot
             rewards[event.agent_id - 1] += r
-
-        # print(rewards)
 
 
 class RewardRegistry:

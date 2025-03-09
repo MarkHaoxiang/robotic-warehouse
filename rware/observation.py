@@ -50,7 +50,7 @@ class Observation(ABC):
 
     @abstractmethod
     def _reset_space(self, warehouse: Warehouse) -> Space:
-        return NotImplementedError()
+        raise NotImplementedError()
 
     def make_obs(self, warehouse: Warehouse) -> tuple[Any, ...]:
         self._prepare_obs(warehouse)
@@ -62,7 +62,7 @@ class Observation(ABC):
         pass
 
     def _make_agent_obs(self, agent: Agent, warehouse: Warehouse):
-        return NotImplementedError()
+        raise NotImplementedError()
 
 
 class DictObservation(Observation):
@@ -270,14 +270,19 @@ class ImageObservation(Observation):
 
     def _reset_space(self, warehouse: Warehouse):
         self.image_observation_layers = warehouse.default_global_image_layers
-        observation_shape = (1 + 2 * self.sensor_range, 1 + 2 * self.sensor_range)
+        obs_shape = (1 + 2 * self.sensor_range, 1 + 2 * self.sensor_range)
 
         layers_min = []
         layers_max = []
         for layer in self.image_observation_layers:
             layer_min, layer_max = ImageLayer.get_bounds(layer)
-            layers_min.append(np.full(observation_shape, layer_min, dtype=IMG_DTYPE))
-            layers_max.append(np.full(observation_shape, layer_max, dtype=IMG_DTYPE))
+            if layer == ImageLayer.STORAGE:
+                for _ in range(warehouse.layout.num_colors):
+                    layers_min.append(np.full(obs_shape, layer_min, dtype=IMG_DTYPE))
+                    layers_max.append(np.full(obs_shape, layer_max, dtype=IMG_DTYPE))
+            else:
+                layers_min.append(np.full(obs_shape, layer_min, dtype=IMG_DTYPE))
+                layers_max.append(np.full(obs_shape, layer_max, dtype=IMG_DTYPE))
 
         # total observation
         min_obs = np.stack(layers_min)
@@ -321,7 +326,7 @@ class ShapedObservation(Observation):
         shelves_locations = 1 - layout.highways.copy()
         goals = np.zeros_like(shelves_locations)
         for goal in layout.goals:
-            goals[*goal] = 1
+            goals[*goal.pos] = 1
         return np.stack((shelves_locations, goals), axis=0, dtype=np.int32)
 
     def _reset_space(self, warehouse: Warehouse):
@@ -331,6 +336,7 @@ class ShapedObservation(Observation):
                 {
                     "direction": s.Discrete(4),
                     "carrying_shelf": s.MultiBinary(1),
+                    "carried_shelf_color": s.Discrete(warehouse.layout._num_colors),
                     "on_highway": s.MultiBinary(1),
                     "on_shelf_requested": s.MultiBinary(1),
                     "closest_goal": s.Box(-1, 1, shape=(2,)),
@@ -352,8 +358,13 @@ class ShapedObservation(Observation):
         layers_max = []
         for layer in self.image_observation_layers:
             layer_min, layer_max = ImageLayer.get_bounds(layer)
-            layers_min.append(np.full(size, layer_min, dtype=IMG_DTYPE))
-            layers_max.append(np.full(size, layer_max, dtype=IMG_DTYPE))
+            if layer == ImageLayer.STORAGE:
+                for _ in range(warehouse.layout.num_colors):
+                    layers_min.append(np.full(size, layer_min, dtype=IMG_DTYPE))
+                    layers_max.append(np.full(size, layer_max, dtype=IMG_DTYPE))
+            else:
+                layers_min.append(np.full(size, layer_min, dtype=IMG_DTYPE))
+                layers_max.append(np.full(size, layer_max, dtype=IMG_DTYPE))
         min_obs = np.stack(layers_min)
         max_obs = np.stack(layers_max)
         local_image_space = s.Box(min_obs, max_obs, dtype=IMG_DTYPE)
@@ -393,17 +404,26 @@ class ShapedObservation(Observation):
             local_image = _rotate_obs(local_image, agent.dir)
 
         # Make feature obs
-        # Direction
         feature_obs = _VectorWriter(self.space[agent.id - 1]["features"].shape[0])
+
+        # Direction
         direction = np.zeros(4)
         direction[agent.dir.value] = 1.0
         feature_obs.write(direction)
+
         # Carrying Shelf
         feature_obs.write(
             [
                 int(agent.carried_shelf is not None),
             ]
         )
+
+        # Color of carried shelf
+        color = np.zeros(warehouse.layout._num_colors)
+        if warehouse._has_shelf_at(agent.pos):
+            color[warehouse._get_shelf_at_exn(agent.pos).color] = 1
+        feature_obs.write(color)
+
         # On highway
         feature_obs.write([int(warehouse.layout.is_highway(agent.pos))])
         is_requested = [0]
@@ -432,8 +452,17 @@ class ShapedObservation(Observation):
             def distance_to(target: Point):
                 return Point.manhattan_distance(agent.pos, target)
 
-        closest_goal = min(warehouse.layout.goals, key=distance_to)
+        if agent.carried_shelf:
+            goal_positions = [
+                goal.pos
+                for goal in warehouse.layout.goals
+                if goal.color == agent.carried_shelf.color
+            ]
+            closest_goal = min(goal_positions, key=distance_to)
+        else:
+            closest_goal = agent.pos
         closest_goal = Point(closest_goal.x - agent.pos.x, closest_goal.y - agent.pos.y)
+
         carried_shelves = [a.carried_shelf for a in warehouse.agents]
         uncollected_requests = [
             s.pos
@@ -575,6 +604,7 @@ def make_global_image(
 ):
     layers = []
     for layer_type in image_layers:
+        layer = None
         match layer_type:
             case ImageLayer.SHELVES:
                 layer = warehouse.grid[_LAYER_SHELVES].copy().astype(IMG_DTYPE)
@@ -601,20 +631,26 @@ def make_global_image(
             case ImageLayer.GOALS:
                 layer = np.zeros(warehouse.grid_size, dtype=IMG_DTYPE)
                 for goal in warehouse.goals:
-                    layer[*goal] = 1
+                    layer[*goal.pos] = 1
             case ImageLayer.ACCESSIBLE:
                 layer = np.ones(warehouse.grid_size, dtype=IMG_DTYPE)
                 for ag in warehouse.agents:
                     layer[*ag.pos] = 0
             case ImageLayer.STORAGE:
-                layer = 1 - warehouse.layout.highways.copy().astype(IMG_DTYPE)
+                concat_layers = warehouse.layout.storage.astype(IMG_DTYPE)
             case _:
                 raise ValueError(f"Unknown image layer type: {layer_type}")
+        if layer is not None:
+            concat_layers = np.array([layer])
         # pad with 0s for out-of-map cells
         if padding_size:
-            layer = np.pad(layer, padding_size, mode="constant")
-        layers.append(layer)
-    return layers
+            concat_layers = np.pad(
+                concat_layers,
+                ((0, 0), (padding_size, padding_size), (padding_size, padding_size)),
+                mode="constant",
+            )
+        layers.append(concat_layers)
+    return np.concat(layers, axis=0)
 
 
 def _rotate_obs(obs: np.ndarray, dir: Direction):

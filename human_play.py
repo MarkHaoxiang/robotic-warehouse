@@ -20,7 +20,14 @@ import warnings
 import numpy as np
 import gymnasium as gym
 
-from rware.warehouse import AgentAction, Warehouse, RewardRegistry, ObservationRegistry
+from rware.warehouse import (
+    AgentAction,
+    Warehouse,
+    RewardRegistry,
+    ObservationRegistry,
+    Layout,
+)
+from rware.entity import Goal, Point
 
 
 def parse_args():
@@ -56,14 +63,34 @@ class InteractiveRWAREEnv:
     ):
         # self.env = gym.make(env, render_mode="human", max_steps=max_steps)
 
+        shelves = np.zeros((4, 16, 16))
+
+        all_possible_locations = [(x, y) for x in range(1, 15) for y in range(1, 15)]
+        np.random.shuffle(all_possible_locations)
+        shelf_locations = all_possible_locations[:50]
+        shelves = np.zeros((4, 16, 16))
+        for i, (x, y) in enumerate(shelf_locations):
+            shelves[i % 4, x, y] = 1
+
+        layout = Layout(
+            grid_size=(16, 16),
+            goals=[
+                Goal(0, Point(0, 0), 0),
+                Goal(1, Point(15, 0), 1),
+                Goal(2, Point(15, 15), 2),
+                Goal(3, Point(0, 15), 3),
+            ],
+            storage=shelves,
+            num_colors=4,
+        )
+
         self.env = Warehouse(
-            shelf_columns=3,
-            column_height=8,
-            shelf_rows=1,
             reward_type=RewardRegistry.SHAPED,
             observation_type=ObservationRegistry.SHAPED,
+            layout=layout,
             render_mode="human",
         )
+
         self.n_agents = self.env.unwrapped.n_agents  # type: ignore
         self.running = True
         self.current_agent_index = 0

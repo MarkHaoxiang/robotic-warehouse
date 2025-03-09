@@ -54,6 +54,7 @@ def test_env_layout_from_params():
         shelf_columns=1,
         column_height=3,
         shelf_rows=3,
+        image_observation_layers=[ImageLayer.SHELVES, ImageLayer.GOALS],
     )
     env.reset()
     layout = str(env.get_global_image())
@@ -82,7 +83,9 @@ def test_env_layout_from_str():
 ...x...
 .g...g.
 """
-    env = Warehouse(layout=layout)
+    env = Warehouse(
+        layout=layout, image_observation_layers=[ImageLayer.SHELVES, ImageLayer.GOALS]
+    )
     env.reset()
     layout = str(env.get_global_image())
     assert_expected_inline(
@@ -109,14 +112,16 @@ def test_env_layout_from_str():
 def test_env_layout_from_image(env_0: Warehouse):
     env_0.reset()
     layers = [
-        ImageLayer.SHELVES,
+        ImageLayer.STORAGE,
         ImageLayer.GOALS,
         ImageLayer.AGENTS,
         ImageLayer.AGENT_DIRECTION,
     ]
     baseline_grid = env_0.get_global_image(image_layers=layers)
     layout = Layout.from_image(baseline_grid, layers)
-    env = Warehouse(layout=layout)
+    env = Warehouse(
+        layout=layout, image_observation_layers=[ImageLayer.SHELVES, ImageLayer.GOALS]
+    )
     env.reset()
     grid = env.get_global_image(image_layers=layers)
 

@@ -34,19 +34,26 @@ RAD2DEG = 57.29577951308232
 # # Define some colors
 _BLACK = (0, 0, 0)
 _WHITE = (255, 255, 255)
-_GREEN = (0, 255, 0)
 _RED = (255, 0, 0)
-_ORANGE = (255, 165, 0)
 _DARKORANGE = (255, 140, 0)
-_DARKSLATEBLUE = (72, 61, 139)
 _TEAL = (0, 128, 128)
 _GREY = (60, 60, 60)
 _LIGHT_GREY = (200, 200, 200)
+_DARK_GREY = (100, 100, 100)
+
+_DARKGREEN = (0, 100, 0)
+_NAVY = (0, 0, 128)
+_OLIVE = (128, 128, 0)
+_MAROON = (128, 0, 0)
+_DARKSLATEBLUE = (72, 61, 139)
+_PURPLE = (128, 0, 128)
+
 
 _BACKGROUND_COLOR = _WHITE
 _GRID_COLOR = _BLACK
-_SHELF_COLOR = _DARKSLATEBLUE
-_SHELF_REQ_COLOR = _TEAL
+
+_SHELF_COLORS = [_TEAL, _DARKSLATEBLUE, _PURPLE, _DARKGREEN, _NAVY, _OLIVE, _MAROON]
+_SHELF_UNREQUESTED_COLOR = _DARK_GREY
 _AGENT_COLOR = _DARKORANGE
 _AGENT_LOADED_COLOR = _RED
 _GOAL_COLOR = _GREY
@@ -134,14 +141,18 @@ class Viewer:
         for shelf in env.shelves:
             x, y = shelf.x, shelf.y
             y = self.rows - y - 1  # pyglet rendering is reversed
-            shelf_color = (
-                _SHELF_REQ_COLOR if shelf in env.request_queue else _SHELF_COLOR
-            )
+            if shelf not in env.request_queue:
+                shelf_color = _SHELF_UNREQUESTED_COLOR
+            else:
+                shelf_color = _SHELF_COLORS[shelf.color]
 
             rect = self._draw_rectangle(
                 x, y, color=shelf_color, padding=_SHELF_PADDING, batch=batch
             )
             objects.append(rect)
+            if shelf in env.request_queue:
+                label = self._draw_char(x, y, "+", color=_WHITE, batch=batch)
+                objects.append(label)
 
         return objects
 
@@ -153,36 +164,22 @@ class Viewer:
                 should_draw = not env.layout.is_highway(Point(x, y_))
                 if should_draw:
                     y = self.rows - y_ - 1  # pyglet rendering is reversed
+                    color = _SHELF_COLORS[env.layout._shelf_colors[x, y_]]
                     rect = self._draw_rectangle(
-                        x, y, padding=1, color=_LIGHT_GREY, batch=batch
+                        x, y, padding=1, color=(*color, 128), batch=batch
                     )
                     objects.append(rect)
 
         # draw goal boxes
         for goal in env.goals:
-            x, y = goal
+            color = _SHELF_COLORS[goal.color]
+            x, y = goal.pos
             y = self.rows - y - 1  # pyglet rendering is reversed
-            rect = self._draw_rectangle(x, y, color=_GOAL_COLOR, batch=batch)
+            rect = self._draw_rectangle(x, y, color=color, batch=batch)
+            label = self._draw_char(x, y, "G", color=_WHITE, batch=batch)
             objects.append(rect)
-
-        # draw goal labels
-        for goal in env.goals:
-            x, y = goal
-            y = self.rows - y - 1
-            label_x = x * (self.grid_size + 1) + (1 / 2) * (self.grid_size + 1)
-            label_y = (self.grid_size + 1) * y + (1 / 2) * (self.grid_size + 1) + 4
-            label = pyglet.text.Label(
-                "G",
-                font_name="Calibri",
-                font_size=18,
-                x=label_x,
-                y=label_y,
-                anchor_x="center",
-                anchor_y="center",
-                color=(*_BLACK, 255),
-                batch=batch,
-            )
             objects.append(label)
+
         return objects
 
     def _draw_agents(self, env: Warehouse, batch: Batch):
@@ -228,3 +225,19 @@ class Viewer:
             color=color,
             batch=batch,
         )
+
+    def _draw_char(self, x, y, char, color, batch=None):
+        label_x = 1 + x * (self.grid_size + 1) + (1 / 2) * (self.grid_size + 1)
+        label_y = (self.grid_size + 1) * y + (1 / 2) * (self.grid_size + 1) + 4
+        label = pyglet.text.Label(
+            char,
+            font_name="Monospace",
+            font_size=18,
+            x=label_x,
+            y=label_y,
+            anchor_x="center",
+            anchor_y="center",
+            color=(*color, 255),
+            batch=batch,
+        )
+        return label

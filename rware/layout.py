@@ -4,7 +4,7 @@ from functools import cached_property
 import numpy as np
 import networkx as nx
 
-from rware.entity import Agent, Shelf
+from rware.entity import Agent, Shelf, Goal
 from rware.utils.typing import Point, Direction, ImageLayer
 
 _COLLISION_LAYERS = 2
@@ -14,8 +14,9 @@ class Layout:
     def __init__(
         self,
         grid_size: tuple[int, int],
-        goals: list[Point],
-        highways: np.ndarray,
+        goals: list[Goal],
+        storage: np.ndarray,
+        num_colors: int = 1,
         agents: list[tuple[Point, Direction]] | None = None,
     ):
         """A layout determines the initial setting of the warehouse.
@@ -29,11 +30,31 @@ class Layout:
         super().__init__()
         self.grid_size = grid_size
         self.goals = goals
-        self._highways = highways
+
+        self._num_colors = num_colors
+        if len(storage.shape) == 2:
+            storage = storage[None, :, :]
+        self._storage = storage
+        self._shelf_colors = np.argmax(storage, axis=0)
+
+        self._highways: np.ndarray = 1 - storage.sum(axis=0)
+
         self._agents = agents
+
+        self.validate()
 
     def validate(self):
         assert len(self.goals) >= 1, "At least one goal position must be provided."
+        assert self._storage.shape[0] == self._num_colors, "Number of colors mismatch."
+        assert self._storage.sum(axis=0).max() == 1, (
+            "Multiple shelves at the same position."
+        )
+
+        color_has_goal = [False for _ in range(self._num_colors)]
+        for goal in self.goals:
+            color_has_goal[goal.color] = True
+        assert all(color_has_goal), "Not all colors have a goal."
+
         assert self._highways.shape[0] == self.grid_size[0], (
             "Implicit grid_size:width from highways does not match grid_size."
         )
@@ -41,12 +62,17 @@ class Layout:
             "Implicit grid_size:height from highways does not match grid_size."
         )
         for goal in self.goals:
-            assert self.is_highway(goal), (
-                f"A shelf cannot be placed onto a goal allocated position. Position {goal}"
+            assert self.is_highway(goal.pos), (
+                f"A shelf cannot be placed onto a goal allocated position. Position {goal.pos}"
             )
 
     def is_highway(self, pos: Point) -> bool:
         return self.highways[*pos]
+
+    def get_color_exn(self, pos: Point) -> int:
+        if self.is_highway(pos):
+            raise ValueError(f"{pos} is a highway")
+        return self._shelf_colors[*pos]
 
     def reset_shelves(self) -> list[Shelf]:
         shelf_counter = 0
@@ -55,9 +81,10 @@ class Layout:
             np.indices(self.grid_size)[0].reshape(-1),
             np.indices(self.grid_size)[1].reshape(-1),
         ):
-            if not self.is_highway(Point(x, y)):
+            pos = Point(x, y)
+            if not self.is_highway(pos):
                 shelf_counter += 1
-                shelves.append(Shelf(shelf_counter, Point(x, y)))
+                shelves.append(Shelf(shelf_counter, pos, self.get_color_exn(pos)))
         return shelves
 
     def reset_agents(
@@ -117,6 +144,14 @@ class Layout:
     def highways(self) -> np.ndarray:
         return self._highways.copy()
 
+    @property
+    def storage(self) -> np.ndarray:
+        return self._storage.copy()
+
+    @property
+    def num_colors(self) -> int:
+        return self._num_colors
+
     @staticmethod
     def from_params(shelf_columns: int, shelf_rows: int, column_height: int) -> Layout:
         assert shelf_columns % 2 == 1, "Only odd number of shelf columns is supported"
@@ -126,11 +161,11 @@ class Layout:
         )
         column_height = column_height
         goals = [
-            Point(grid_size[0] // 2 - 1, grid_size[1] - 1),
-            Point(grid_size[0] // 2, grid_size[1] - 1),
+            Goal(0, Point(grid_size[0] // 2 - 1, grid_size[1] - 1)),
+            Goal(1, Point(grid_size[0] // 2, grid_size[1] - 1)),
         ]
 
-        highways = np.zeros(grid_size, dtype=np.uint8)
+        shelves = np.zeros(grid_size, dtype=np.uint8)
 
         def highway_func(x, y):
             is_on_vertical_highway = x % 3 == 0
@@ -148,9 +183,9 @@ class Layout:
 
         for x in range(grid_size[0]):
             for y in range(grid_size[1]):
-                highways[x, y] = int(highway_func(x, y))
+                shelves[x, y] = 1 - int(highway_func(x, y))
 
-        return Layout(grid_size, goals, highways)
+        return Layout(grid_size, goals, shelves)
 
     @staticmethod
     def from_str(layout: str) -> Layout:
@@ -161,25 +196,26 @@ class Layout:
         for line in lines:
             assert len(line) == grid_width, "Layout must be rectangular"
 
-        goals: list[Point] = []
+        goals: list[Goal] = []
         grid_size = (grid_width, grid_height)
-        highways = np.zeros(grid_size, dtype=np.uint8)
+        shelves = np.zeros(grid_size, dtype=np.uint8)
 
+        goal_count = 0
         for y, line in enumerate(lines):
             for x, char in enumerate(line):
                 assert char.lower() in "gx."
                 if char.lower() == "g":
-                    goals.append(Point(x, y))
-                    highways[x, y] = 1
-                elif char.lower() == ".":
-                    highways[x, y] = 1
+                    goals.append(Goal(id_=goal_count, pos=Point(x, y)))
+                    goal_count += 1
+                elif char.lower() == "x":
+                    shelves[x, y] = 1
 
-        return Layout(grid_size, goals, highways)
+        return Layout(grid_size=grid_size, goals=goals, storage=shelves, num_colors=1)
 
     @staticmethod
     def from_image(
         image: np.ndarray,
-        image_layers: list[ImageLayer] = [ImageLayer.SHELVES, ImageLayer.GOALS],
+        image_layers: list[ImageLayer] = [ImageLayer.STORAGE, ImageLayer.GOALS],
     ) -> Layout:
         """The partial inverse of Warehouse.get_global_image
 
@@ -197,19 +233,26 @@ class Layout:
         grid_size = (w, h)
 
         # Shelves
-        assert ImageLayer.SHELVES in image_layers, (
-            f"Requires SHELVES as a channel within image, but recieved {image_layers}"
+        assert any(layer == ImageLayer.STORAGE for layer in image_layers), (
+            f"Requires at least one STORAGE channel within image, but received {image_layers}"
         )
-        shelves = image[image_layers.index(ImageLayer.SHELVES)]
-        highways = 1 - shelves
+        shelf_layers = [
+            image[i]
+            for i, layer in enumerate(image_layers)
+            if layer == ImageLayer.STORAGE
+        ]
+        shelves = np.stack(shelf_layers)
+        num_colors = shelves.shape[0]
 
         # Goals
         assert ImageLayer.GOALS in image_layers, (
             f"Requires GOALS as a channel within image, but recieved {image_layers}"
         )
         goal_layer = image[image_layers.index(ImageLayer.GOALS)]
-        positions = np.argwhere(goal_layer)
-        goals = [Point(*pos.tolist()) for pos in positions]
+        goals = []
+        for i, pos in enumerate(np.argwhere(goal_layer)):
+            point = Point(pos[0], pos[1])  # type: ignore
+            goals.append(Goal(i, point, color=goal_layer[*point] - 1))
 
         # Agents
         agents = None
@@ -224,7 +267,13 @@ class Layout:
                 ]
             else:
                 agents = [(pos, Direction.UP) for pos in agent_positions]
-        return Layout(grid_size, goals, highways, agents)
+        return Layout(
+            grid_size=grid_size,
+            goals=goals,
+            storage=shelves,
+            agents=agents,
+            num_colors=num_colors,
+        )
 
     @property
     def n_goals(self):
