@@ -276,7 +276,7 @@ class ImageObservation(Observation):
         layers_max = []
         for layer in self.image_observation_layers:
             layer_min, layer_max = ImageLayer.get_bounds(layer)
-            if layer == ImageLayer.STORAGE:
+            if layer in [ImageLayer.STORAGE, ImageLayer.GOALS]:
                 for _ in range(warehouse.layout.num_colors):
                     layers_min.append(np.full(obs_shape, layer_min, dtype=IMG_DTYPE))
                     layers_max.append(np.full(obs_shape, layer_max, dtype=IMG_DTYPE))
@@ -358,7 +358,7 @@ class ShapedObservation(Observation):
         layers_max = []
         for layer in self.image_observation_layers:
             layer_min, layer_max = ImageLayer.get_bounds(layer)
-            if layer == ImageLayer.STORAGE:
+            if layer in [ImageLayer.STORAGE, ImageLayer.GOALS]:
                 for _ in range(warehouse.layout.num_colors):
                     layers_min.append(np.full(size, layer_min, dtype=IMG_DTYPE))
                     layers_max.append(np.full(size, layer_max, dtype=IMG_DTYPE))
@@ -629,9 +629,11 @@ def make_global_image(
                     if ag.carried_shelf is not None:
                         layer[*ag.pos] = 1
             case ImageLayer.GOALS:
-                layer = np.zeros(warehouse.grid_size, dtype=IMG_DTYPE)
+                concat_layers = np.zeros(
+                    (warehouse.layout.num_colors, *warehouse.grid_size), dtype=IMG_DTYPE
+                )
                 for goal in warehouse.goals:
-                    layer[*goal.pos] = 1
+                    concat_layers[goal.color, *goal.pos] = 1
             case ImageLayer.ACCESSIBLE:
                 layer = np.ones(warehouse.grid_size, dtype=IMG_DTYPE)
                 for ag in warehouse.agents:
@@ -648,7 +650,7 @@ def make_global_image(
                 concat_layers,
                 ((0, 0), (padding_size, padding_size), (padding_size, padding_size)),
                 mode="constant",
-            )
+            )  # type: ignore
         layers.append(concat_layers)
     return np.concat(layers, axis=0)
 

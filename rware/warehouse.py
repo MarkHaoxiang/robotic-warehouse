@@ -404,6 +404,7 @@ class Warehouse(gym.Env):
 
         rewards = self.reward_type.compute_reward(events)
         new_obs = self.obs_generator.make_obs(self)
+
         info = self._get_info()
         return new_obs, rewards, done, truncated, info
 

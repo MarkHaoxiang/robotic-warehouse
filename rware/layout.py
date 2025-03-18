@@ -249,6 +249,7 @@ class Layout:
             f"Requires GOALS as a channel within image, but recieved {image_layers}"
         )
         goal_layer = image[image_layers.index(ImageLayer.GOALS)]
+        goal_layer = goal_layer.astype(np.int32)
         goals = []
         for i, pos in enumerate(np.argwhere(goal_layer)):
             point = Point(pos[0], pos[1])  # type: ignore

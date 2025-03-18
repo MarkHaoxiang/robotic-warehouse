@@ -101,8 +101,8 @@ def env_3():
 
 
 def test_goal_location(env_0: Warehouse):
-    assert env_0.goals[0] == (4, 28)
-    assert env_0.goals[1] == (5, 28)
+    assert env_0.goals[0].pos == (4, 28)
+    assert env_0.goals[1].pos == (5, 28)
 
 
 def test_goal_1(env_0: Warehouse):
