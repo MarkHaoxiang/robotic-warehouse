@@ -26,20 +26,29 @@ class ImageLayer(Enum):
     AGENT_DIRECTION = 3
     # binary layer indicating agents with load
     AGENT_LOAD = 4
-    # binary layer indicating goal/ delivery locations
-    GOALS = 5
+    # colors of each image
+    AGENT_COLOR = 5
+    # layer indicating goal/ delivery locations as int (color + 1 for values)
+    GOALS = 6
+    # one-hot layer indicating goal/ delivery locations. Layer for each color.
+    GOALS_COLOR_ONE_HOT = 7
     # binary layer indicating accessible cells (all but occupied cells/ out of map)
-    ACCESSIBLE = 6
+    ACCESSIBLE = 8
     # binary layer indicating locations where shelves can be placed (non-highway)
-    STORAGE = 7
+    STORAGE = 9
 
     @staticmethod
-    def get_bounds(layer: ImageLayer) -> tuple[int, int]:
+    def get_bounds(layer: ImageLayer, num_colors: int) -> list[tuple[int, int]]:
         match layer:
             case ImageLayer.AGENT_DIRECTION:
-                return (0, len(Direction))
+                return [(0, len(Direction))]
+            case ImageLayer.GOALS | ImageLayer.AGENT_COLOR:
+                return [(0, num_colors + 1)]
+            # One hot
+            case ImageLayer.GOALS_COLOR_ONE_HOT | ImageLayer.STORAGE:
+                return [(0, 1) for _ in range(num_colors)]
             case _:
-                return (0, 1)
+                return [(0, 1)]
 
 
 class Point(NamedTuple):

@@ -332,36 +332,36 @@ class Warehouse(gym.Env):
                 # Rotate direction
                 agent.dir = agent.req_direction()
             elif (
-                agent.req_action == AgentAction.TOGGLE_LOAD
-                and not agent.carried_shelf
-                and self._has_shelf_at(agent.pos)
+                self._has_shelf_at(agent.pos)
+                and agent.req_action == AgentAction.TOGGLE_LOAD
+                and agent.can_interact(self._get_shelf_at_exn(agent.pos))
             ):
-                # Pick up a shelf
-                agent.carried_shelf = self._get_shelf_at(agent.pos)
-                events.append(
-                    event.PickupShelf(
-                        agent.id,
-                        agent.carried_shelf_exn.id,
-                        agent.pos,
-                        agent.carried_shelf_exn.is_requested,
-                        agent.carried_shelf_exn.color,
-                    )
-                )
-            elif agent.req_action == AgentAction.TOGGLE_LOAD and agent.carried_shelf:
-                # Try to put down a shelf
-                if not self.layout.is_highway(agent.pos):
+                if not agent.carried_shelf:
+                    # Pick up a shelf
+                    agent.carried_shelf = self._get_shelf_at(agent.pos)
                     events.append(
-                        event.DropoffShelf(
+                        event.PickupShelf(
                             agent.id,
-                            agent.carried_shelf.id,
+                            agent.carried_shelf_exn.id,
                             agent.pos,
-                            agent.has_delivered,
-                            agent.carried_shelf.is_requested,
+                            agent.carried_shelf_exn.is_requested,
+                            agent.carried_shelf_exn.color,
                         )
                     )
-                    agent.carried_shelf.color = self.layout.get_color_exn(agent.pos)
-                    agent.carried_shelf = None
-                    agent.has_delivered = False
+                else:
+                    if not self.layout.is_highway(agent.pos):
+                        events.append(
+                            event.DropoffShelf(
+                                agent.id,
+                                agent.carried_shelf.id,
+                                agent.pos,
+                                agent.has_delivered,
+                                agent.carried_shelf.is_requested,
+                            )
+                        )
+                        agent.carried_shelf.color = self.layout.get_color_exn(agent.pos)
+                        agent.carried_shelf = None
+                        agent.has_delivered = False
 
         self._recalc_grid()
 

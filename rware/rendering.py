@@ -19,7 +19,7 @@ if "Apple" in sys.version:
 import pyglet
 from pyglet.graphics import Batch
 from pyglet.window import Window
-from pyglet.shapes import Rectangle, Line, Triangle
+from pyglet.shapes import Rectangle, Line, Triangle, Circle
 from pyglet.gl import (
     glEnable,
     glBlendFunc,
@@ -208,7 +208,18 @@ class Viewer:
                 x2, y2 = cx + agent_size / 2, cy + agent_size / 2
                 x3, y3 = cx + agent_size / 2, cy - agent_size / 2
 
-            draw_color = _AGENT_LOADED_COLOR if agent.carried_shelf else _AGENT_COLOR
+            if agent.loaded:
+                draw_color = _AGENT_LOADED_COLOR
+            elif agent.color != -1:
+                if (
+                    not env.layout.is_highway(agent.pos)
+                    and env.layout.get_color_exn(agent.pos) == agent.color
+                ):
+                    draw_color = _AGENT_COLOR
+                else:
+                    draw_color = _SHELF_COLORS[agent.color]
+            else:
+                draw_color = _AGENT_COLOR
 
             triangle = Triangle(
                 x=x, y=y, x2=x2, y2=y2, x3=x3, y3=y3, color=draw_color, batch=batch
@@ -222,6 +233,15 @@ class Viewer:
             y=(self.grid_size + 1) * y + padding + 1,
             width=self.grid_size - 2 * padding + 1,
             height=self.grid_size - 2 * padding + 1,
+            color=color,
+            batch=batch,
+        )
+
+    def _draw_circle(self, x, y, color, batch=None):
+        return Circle(
+            x=(self.grid_size + 1) * x + self.grid_size // 2 + 1,
+            y=(self.grid_size + 1) * y + self.grid_size // 2 + 0,
+            radius=self.grid_size // 8,
             color=color,
             batch=batch,
         )

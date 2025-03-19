@@ -26,6 +26,7 @@ from rware.warehouse import (
     RewardRegistry,
     ObservationRegistry,
     Layout,
+    Direction,
 )
 from rware.entity import Goal, Point
 
@@ -79,6 +80,12 @@ class InteractiveRWAREEnv:
                 Goal(1, Point(15, 0), 1),
                 Goal(2, Point(15, 15), 2),
                 Goal(3, Point(0, 15), 3),
+            ],
+            agents=[
+                (Point(1, 1), Direction.UP, 0),
+                (Point(14, 1), Direction.RIGHT, 1),
+                (Point(14, 14), Direction.LEFT, 2),
+                (Point(1, 14), Direction.DOWN, 3),
             ],
             storage=shelves,
             num_colors=4,

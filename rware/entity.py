@@ -10,6 +10,7 @@ _LAYER_AGENTS = 0
 _LAYER_SHELVES = 1
 
 ID: TypeAlias = int
+Color: TypeAlias = int
 
 
 class AgentActionSpace:
@@ -60,8 +61,21 @@ class Entity:
         self.pos = Point(self.pos.x, value)
 
 
+class Shelf(Entity):
+    def __init__(self, id_: ID, pos: Point, color: Color):
+        super().__init__(id_, pos)
+        self.is_requested = False
+        self.color = color
+
+    @property
+    def collision_layers(self):
+        return (_LAYER_SHELVES,)
+
+
 class Agent(Entity):
-    def __init__(self, id_: ID, pos: Point, dir_: Direction, msg_bits: int):
+    def __init__(
+        self, id_: ID, pos: Point, dir_: Direction, msg_bits: int, color: Color
+    ):
         super().__init__(id_, pos)
         self.dir = dir_
         self.message = np.zeros(msg_bits)
@@ -69,12 +83,23 @@ class Agent(Entity):
         self.carried_shelf: Shelf | None = None
         self.canceled_action = None
         self.has_delivered = False
-        self.loaded = False
+        self.color = color
 
     @property
     def carried_shelf_exn(self):
         assert self.carried_shelf is not None, f"No shelf carried by agent {self.id}"
         return self.carried_shelf
+
+    @property
+    def loaded(self) -> bool:
+        return self.carried_shelf is not None
+
+    def can_interact(self, shelf: Shelf) -> bool:
+        if shelf.pos != self.pos:
+            return False
+        if self.color != -1 and shelf.color != self.color:
+            return False
+        return True
 
     @property
     def collision_layers(self):
@@ -107,17 +132,6 @@ class Agent(Entity):
             return wraplist[(wraplist.index(self.dir) - 1) % len(wraplist)]
         else:
             return self.dir
-
-
-class Shelf(Entity):
-    def __init__(self, id_: ID, pos: Point, color: int):
-        super().__init__(id_, pos)
-        self.is_requested = False
-        self.color = color
-
-    @property
-    def collision_layers(self):
-        return (_LAYER_SHELVES,)
 
 
 class Goal(Entity):

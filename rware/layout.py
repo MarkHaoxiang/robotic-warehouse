@@ -4,7 +4,7 @@ from functools import cached_property
 import numpy as np
 import networkx as nx
 
-from rware.entity import Agent, Shelf, Goal
+from rware.entity import Agent, Shelf, Goal, Color
 from rware.utils.typing import Point, Direction, ImageLayer
 
 _COLLISION_LAYERS = 2
@@ -17,7 +17,7 @@ class Layout:
         goals: list[Goal],
         storage: np.ndarray,
         num_colors: int = 1,
-        agents: list[tuple[Point, Direction]] | None = None,
+        agents: list[tuple[Point, Direction, Color]] | None = None,
     ):
         """A layout determines the initial setting of the warehouse.
 
@@ -105,15 +105,15 @@ class Layout:
             agent_dirs = rng.choice(Direction, size=n_agents)  # type: ignore
             agents = [
                 Agent(
-                    i + 1, Point(x, y), dir_, msg_bits
+                    i + 1, Point(x, y), dir_, msg_bits, -1
                 )  # IDs start from 1 since 0 represents nothing in observation
                 for i, (x, y, dir_) in enumerate(zip(*agent_locs, agent_dirs))
             ]
         else:
             # TODO markli: Validate
             agents = [
-                Agent(i + 1, Point(*pos), dir_, msg_bits)
-                for i, (pos, dir_) in enumerate(self._agents)
+                Agent(i + 1, Point(*pos), dir_, msg_bits, color)
+                for i, (pos, dir_, color) in enumerate(self._agents)
             ]
         return agents
 
@@ -261,13 +261,25 @@ class Layout:
             agent_layer = image[image_layers.index(ImageLayer.AGENTS)]
             positions = np.argwhere(agent_layer)
             agent_positions = [Point(*pos.tolist()) for pos in positions]
+
+            # Get agent directions if provided
             if ImageLayer.AGENT_DIRECTION in image_layers:
                 directions = image[image_layers.index(ImageLayer.AGENT_DIRECTION)]
-                agents = [
-                    (pos, Direction(directions[*pos] - 1)) for pos in agent_positions
-                ]
             else:
-                agents = [(pos, Direction.UP) for pos in agent_positions]
+                # All pointing up
+                directions = np.ones((w, h), dtype=np.int32)
+
+            # Get agent colors if provided
+            if ImageLayer.AGENT_COLOR in image_layers:
+                colors = image[image_layers.index(ImageLayer.AGENT_COLOR)] - 1
+            else:
+                colors = np.full((w, h), -1, dtype=np.int32)
+            colors = np.maximum(colors, -1)
+
+            agents = [
+                (pos, Direction(directions[*pos] - 1), colors[*pos])
+                for pos in agent_positions
+            ]
         return Layout(
             grid_size=grid_size,
             goals=goals,

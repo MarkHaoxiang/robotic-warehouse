@@ -9,7 +9,7 @@ import numpy as np
 import gymnasium.spaces as s
 from gymnasium.spaces import Space
 
-from rware.entity import Agent, _LAYER_AGENTS, _LAYER_SHELVES
+from rware.entity import Agent, Shelf, _LAYER_AGENTS, _LAYER_SHELVES
 from rware.layout import Layout
 from rware.utils.typing import Direction, ImageLayer, Point
 
@@ -275,12 +275,8 @@ class ImageObservation(Observation):
         layers_min = []
         layers_max = []
         for layer in self.image_observation_layers:
-            layer_min, layer_max = ImageLayer.get_bounds(layer)
-            if layer in [ImageLayer.STORAGE, ImageLayer.GOALS]:
-                for _ in range(warehouse.layout.num_colors):
-                    layers_min.append(np.full(obs_shape, layer_min, dtype=IMG_DTYPE))
-                    layers_max.append(np.full(obs_shape, layer_max, dtype=IMG_DTYPE))
-            else:
+            layer_bounds = ImageLayer.get_bounds(layer, warehouse.layout.num_colors)
+            for layer_min, layer_max in layer_bounds:
                 layers_min.append(np.full(obs_shape, layer_min, dtype=IMG_DTYPE))
                 layers_max.append(np.full(obs_shape, layer_max, dtype=IMG_DTYPE))
 
@@ -335,10 +331,12 @@ class ShapedObservation(Observation):
             OrderedDict(
                 {
                     "direction": s.Discrete(4),
+                    "color": s.Discrete(warehouse.layout._num_colors + 1),
                     "carrying_shelf": s.MultiBinary(1),
                     "carried_shelf_color": s.Discrete(warehouse.layout._num_colors),
                     "on_highway": s.MultiBinary(1),
                     "on_shelf_requested": s.MultiBinary(1),
+                    "on_shelf_color_correct": s.MultiBinary(1),
                     "closest_goal": s.Box(-1, 1, shape=(2,)),
                     "closest_uncollected_request": s.Box(-1, 1, shape=(2,)),
                     "closest_available_storage": s.Box(-1, 1, shape=(2,)),
@@ -357,14 +355,11 @@ class ShapedObservation(Observation):
         layers_min = []
         layers_max = []
         for layer in self.image_observation_layers:
-            layer_min, layer_max = ImageLayer.get_bounds(layer)
-            if layer in [ImageLayer.STORAGE, ImageLayer.GOALS]:
-                for _ in range(warehouse.layout.num_colors):
-                    layers_min.append(np.full(size, layer_min, dtype=IMG_DTYPE))
-                    layers_max.append(np.full(size, layer_max, dtype=IMG_DTYPE))
-            else:
+            layer_bounds = ImageLayer.get_bounds(layer, warehouse.layout.num_colors)
+            for layer_min, layer_max in layer_bounds:
                 layers_min.append(np.full(size, layer_min, dtype=IMG_DTYPE))
                 layers_max.append(np.full(size, layer_max, dtype=IMG_DTYPE))
+
         min_obs = np.stack(layers_min)
         max_obs = np.stack(layers_max)
         local_image_space = s.Box(min_obs, max_obs, dtype=IMG_DTYPE)
@@ -373,7 +368,7 @@ class ShapedObservation(Observation):
             {
                 "local_image": local_image_space,
                 "features": feature_space,
-                "position": s.Box(0, max(warehouse.grid_size) - 1, (2,)),
+                "position": s.Box(0, 1, (2,)),
             }
         )
         return _make_multiagent_space(agent_space, self.n_agents)
@@ -411,6 +406,11 @@ class ShapedObservation(Observation):
         direction[agent.dir.value] = 1.0
         feature_obs.write(direction)
 
+        # Color of agent
+        color = np.zeros(warehouse.layout._num_colors + 1)
+        color[agent.color + 1] = 1.0
+        feature_obs.write(color)
+
         # Carrying Shelf
         feature_obs.write(
             [
@@ -426,13 +426,18 @@ class ShapedObservation(Observation):
 
         # On highway
         feature_obs.write([int(warehouse.layout.is_highway(agent.pos))])
+
+        # On shelf requested / color correct
         is_requested = [0]
-        # Shelf requested
-        if (
-            warehouse._has_shelf_at(agent.pos)
-            and warehouse._get_shelf_at_exn(agent.pos).is_requested
-        ):
-            is_requested[0] = 1
+        is_color_correct = [0]
+        if warehouse._has_shelf_at(agent.pos):
+            if warehouse._get_shelf_at_exn(agent.pos).is_requested:
+                is_requested[0] = 1
+            if (
+                warehouse._get_shelf_at_exn(agent.pos).color == agent.color
+                or agent.color == -1
+            ):
+                is_color_correct[0] = 1
         feature_obs.write(is_requested)
 
         # Closest
@@ -452,31 +457,38 @@ class ShapedObservation(Observation):
             def distance_to(target: Point):
                 return Point.manhattan_distance(agent.pos, target)
 
+        def closest_position(positions: list[Point]):
+            if len(positions) > 0:
+                pos = min(positions, key=distance_to)
+            else:
+                pos = agent.pos
+            return Point(pos.x - agent.pos.x, pos.y - agent.pos.y)
+
         if agent.carried_shelf:
             goal_positions = [
                 goal.pos
                 for goal in warehouse.layout.goals
                 if goal.color == agent.carried_shelf.color
             ]
-            closest_goal = min(goal_positions, key=distance_to)
         else:
-            closest_goal = agent.pos
-        closest_goal = Point(closest_goal.x - agent.pos.x, closest_goal.y - agent.pos.y)
+            goal_positions = []
+        closest_goal = closest_position(goal_positions)
 
         carried_shelves = [a.carried_shelf for a in warehouse.agents]
+
+        def filter_request(shelf: Shelf):
+            assert shelf.is_requested
+            if shelf in carried_shelves:
+                return False
+            if shelf.color != agent.color and agent.color != -1:
+                return False
+            return True
+
         uncollected_requests = [
-            s.pos
-            for s in warehouse.request_queue
-            if s.is_requested and s not in carried_shelves
+            s.pos for s in warehouse.request_queue if filter_request(s)
         ]
-        if len(uncollected_requests) > 0:
-            closest_uncollected_request = min(uncollected_requests, key=distance_to)
-        else:
-            closest_uncollected_request = agent.pos
-        closest_uncollected_request = Point(
-            closest_uncollected_request.x - agent.pos.x,
-            closest_uncollected_request.y - agent.pos.y,
-        )
+        closest_uncollected_request = closest_position(uncollected_requests)
+
         available_storage = [
             Point(x, y)
             for x in range(warehouse.layout.grid_size[0])
@@ -487,23 +499,18 @@ class ShapedObservation(Observation):
             for p in available_storage
             if not warehouse._has_shelf_at(p) and not warehouse.layout.is_highway(p)
         ]
-        if len(available_storage) > 0:
-            closest_available_storage = min(available_storage, key=distance_to)
-        else:
-            closest_available_storage = agent.pos
-        closest_available_storage = Point(
-            closest_available_storage.x - agent.pos.x,
-            closest_available_storage.y - agent.pos.y,
-        )
+        closest_available_storage = closest_position(available_storage)
 
         feature_obs.write(closest_goal.normalise(*warehouse.grid_size))
         feature_obs.write(closest_uncollected_request.normalise(*warehouse.grid_size))
         feature_obs.write(closest_available_storage.normalise(*warehouse.grid_size))
 
+        pos_obs = np.array(agent.pos.normalise(*warehouse.grid_size), dtype=np.float32)
+
         return {
             "local_image": local_image,
             "features": feature_obs.vector,
-            "position": np.array(agent.pos, dtype=np.float32),
+            "position": pos_obs,
         }
 
 
@@ -623,12 +630,23 @@ def make_global_image(
                 for ag in warehouse.agents:
                     agent_direction = ag.dir.value + 1
                     layer[*ag.pos] = agent_direction
+            case ImageLayer.AGENT_COLOR:
+                layer = np.zeros(warehouse.grid_size, dtype=IMG_DTYPE)
+                for ag in warehouse.agents:
+                    if ag.color != -1:
+                        layer[*ag.pos] = ag.color + 1
+                    else:
+                        layer[*ag.pos] = -1
             case ImageLayer.AGENT_LOAD:
                 layer = np.zeros(warehouse.grid_size, dtype=IMG_DTYPE)
                 for ag in warehouse.agents:
                     if ag.carried_shelf is not None:
                         layer[*ag.pos] = 1
             case ImageLayer.GOALS:
+                layer = np.zeros(warehouse.grid_size, dtype=IMG_DTYPE)
+                for goal in warehouse.goals:
+                    layer[goal.pos] = goal.color + 1
+            case ImageLayer.GOALS_COLOR_ONE_HOT:
                 concat_layers = np.zeros(
                     (warehouse.layout.num_colors, *warehouse.grid_size), dtype=IMG_DTYPE
                 )
@@ -681,8 +699,7 @@ class ObservationRegistry:
         ImageLayer.SHELVES,
         ImageLayer.REQUESTS,
         ImageLayer.AGENTS,
-        ImageLayer.GOALS,
-        ImageLayer.ACCESSIBLE,
+        ImageLayer.GOALS_COLOR_ONE_HOT,
         ImageLayer.STORAGE,
     ]
 
