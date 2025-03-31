@@ -14,6 +14,7 @@ from rware.warehouse import (
     AgentAction,
     RewardRegistry,
     ImageLayer,
+    Observation,
 )
 
 
@@ -274,7 +275,7 @@ def test_action_space_3():
         ObservationRegistry.SHAPED,
     ],
 )
-def test_obs_space_contains(observation_type: ObservationRegistry):
+def test_obs_space_contains(observation_type: Observation):
     env = Warehouse(
         shelf_columns=1,
         column_height=3,

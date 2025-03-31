@@ -331,7 +331,7 @@ class ShapedObservation(Observation):
             OrderedDict(
                 {
                     "direction": s.Discrete(4),
-                    "color": s.Discrete(warehouse.layout._num_colors + 1),
+                    "color": s.Discrete(warehouse.layout._num_colors),
                     "carrying_shelf": s.MultiBinary(1),
                     "carried_shelf_color": s.Discrete(warehouse.layout._num_colors),
                     "on_highway": s.MultiBinary(1),
@@ -407,8 +407,11 @@ class ShapedObservation(Observation):
         feature_obs.write(direction)
 
         # Color of agent
-        color = np.zeros(warehouse.layout._num_colors + 1)
-        color[agent.color + 1] = 1.0
+        color = np.zeros(warehouse.layout._num_colors)
+        if agent.color == -1:
+            color = color + 1
+        else:
+            color[agent.color] = 1.0
         feature_obs.write(color)
 
         # Carrying Shelf

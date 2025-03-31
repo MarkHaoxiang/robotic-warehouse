@@ -277,7 +277,7 @@ class Layout:
             colors = np.maximum(colors, -1)
 
             agents = [
-                (pos, Direction(directions[*pos] - 1), colors[*pos])
+                (pos, Direction(directions[*pos] - 1), int(colors[*pos]))
                 for pos in agent_positions
             ]
         return Layout(
