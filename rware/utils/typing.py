@@ -34,7 +34,7 @@ class ImageLayer(Enum):
     GOALS_COLOR_ONE_HOT = 7
     # binary layer indicating accessible cells (all but occupied cells/ out of map)
     ACCESSIBLE = 8
-    # binary layer indicating locations where shelves can be placed (non-highway)
+    # one-hot layer indicating locations where shelves can be placed (non-highway)
     STORAGE = 9
 
     @staticmethod

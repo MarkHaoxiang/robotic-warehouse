@@ -312,7 +312,9 @@ class ShapedObservation(Observation):
     """When the global layout is known to all agents."""
 
     def __init__(
-        self, image_observation_layers: list[ImageLayer], directional: bool = True
+        self,
+        image_observation_layers: list[ImageLayer],
+        directional: bool = True,
     ):
         super().__init__()
         self.image_observation_layers = image_observation_layers
@@ -371,6 +373,7 @@ class ShapedObservation(Observation):
                 "position": s.Box(0, 1, (2,)),
             }
         )
+
         return _make_multiagent_space(agent_space, self.n_agents)
 
     def _prepare_obs(self, warehouse):
@@ -508,7 +511,8 @@ class ShapedObservation(Observation):
         feature_obs.write(closest_uncollected_request.normalise(*warehouse.grid_size))
         feature_obs.write(closest_available_storage.normalise(*warehouse.grid_size))
 
-        pos_obs = np.array(agent.pos.normalise(*warehouse.grid_size), dtype=np.float32)
+        pos_obs = np.array(agent.pos)
+        # pos_obs = np.array(agent.pos.normalise(*warehouse.grid_size), dtype=np.float32)
 
         return {
             "local_image": local_image,
