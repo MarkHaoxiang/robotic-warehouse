@@ -47,7 +47,7 @@ class Layout:
         assert len(self.goals) >= 1, "At least one goal position must be provided."
         assert self._storage.shape[0] == self._num_colors, "Number of colors mismatch."
         assert self._storage.sum(axis=0).max() == 1, (
-            "Multiple shelves at the same position."
+            f"Multiple shelves at the same position. {self._storage.sum(axis=0).max()} found."
         )
 
         color_has_goal = [False for _ in range(self._num_colors)]
