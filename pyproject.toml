@@ -24,4 +24,5 @@ dev = [
     "pytest>=8.3.4",
     "ruff>=0.9.3",
     "expecttest>=0.3.0",
+    "pyglet>=2.1",
 ]
